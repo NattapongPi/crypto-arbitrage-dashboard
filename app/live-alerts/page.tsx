@@ -21,7 +21,6 @@ export default function LiveAlertsPage() {
     ? liveAlertsData
     : liveAlertsData.filter(item => item.strategy === selectedStrategy)
 
-  // Sort by spread (descending)
   const sortedData = [...filteredData].sort((a, b) => {
     const spreadA = parseFloat(a.spread.replace('%', '').replace('+', ''))
     const spreadB = parseFloat(b.spread.replace('%', '').replace('+', ''))
@@ -32,6 +31,7 @@ export default function LiveAlertsPage() {
     {
       key: 'time',
       header: 'Time',
+      mobileHidden: true,
       render: (item: LiveAlert) => (
         <span className="font-mono text-sm text-muted-foreground">{item.time}</span>
       ),
@@ -76,6 +76,7 @@ export default function LiveAlertsPage() {
     {
       key: 'feeAdjPnl',
       header: 'Fee-Adj PnL',
+      mobileHidden: true,
       render: (item: LiveAlert) => (
         <span className="font-mono tabular-nums text-emerald-400">{item.feeAdjPnl}</span>
       ),
@@ -83,6 +84,7 @@ export default function LiveAlertsPage() {
     {
       key: 'age',
       header: 'Age',
+      mobileHidden: true,
       render: (item: LiveAlert) => (
         <span className={cn(
           'font-mono text-sm',
@@ -100,6 +102,7 @@ export default function LiveAlertsPage() {
     {
       key: 'action',
       header: 'Action',
+      mobileHidden: true,
       render: () => (
         <Button variant="outline" size="sm" className="h-7 text-xs">
           View Details
@@ -110,80 +113,65 @@ export default function LiveAlertsPage() {
 
   return (
     <DashboardLayout title="Live Alerts" subtitle="Dashboard">
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Stats Row */}
-        <StatCardRow>
-          <StatCard
-            label="Active Now"
-            value={alertStats.activeNow}
-            variant="green"
-          />
-          <StatCard
-            label="Spot-Futures"
-            value={alertStats.spotFutures}
-            variant="cyan"
-          />
-          <StatCard
-            label="Funding Rate"
-            value={alertStats.fundingRate}
-            variant="purple"
-          />
-          <StatCard
-            label="Calendar Spread"
-            value={alertStats.calendarSpread}
-            variant="yellow"
-          />
-          <StatCard
-            label="Fading"
-            value={alertStats.fading}
-            variant="red"
-          />
+        <StatCardRow cols5>
+          <StatCard label="Active Now" value={alertStats.activeNow} variant="green" />
+          <StatCard label="Spot-Futures" value={alertStats.spotFutures} variant="cyan" />
+          <StatCard label="Funding Rate" value={alertStats.fundingRate} variant="purple" />
+          <StatCard label="Calendar Spread" value={alertStats.calendarSpread} variant="yellow" />
+          <StatCard label="Fading" value={alertStats.fading} variant="red" />
         </StatCardRow>
 
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Filter:</span>
-            <div className="flex items-center gap-1">
-              {strategies.map((strategy) => (
-                <button
-                  key={strategy}
-                  onClick={() => setSelectedStrategy(strategy)}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                    selectedStrategy === strategy
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-                  )}
-                >
-                  {strategy}
-                </button>
-              ))}
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Strategy filter */}
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-xs text-muted-foreground sm:text-sm">Filter:</span>
+              <div className="flex items-center gap-1">
+                {strategies.map((strategy) => (
+                  <button
+                    key={strategy}
+                    onClick={() => setSelectedStrategy(strategy)}
+                    className={cn(
+                      'shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                      selectedStrategy === strategy
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                    )}
+                  >
+                    {strategy}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Min Spread:</span>
-            <input
-              type="text"
-              value={minSpread}
-              onChange={(e) => setMinSpread(e.target.value)}
-              className="w-20 rounded-md border border-border bg-input px-2 py-1 text-sm text-foreground"
-            />
-          </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-xs text-muted-foreground sm:text-sm">Min Spread:</span>
+                <input
+                  type="text"
+                  value={minSpread}
+                  onChange={(e) => setMinSpread(e.target.value)}
+                  className="w-20 rounded-md border border-border bg-input px-2 py-1 text-sm text-foreground"
+                />
+              </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Sort by:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="rounded-md border border-border bg-input px-2 py-1 text-sm text-foreground"
-            >
-              <option>Spread (desc)</option>
-              <option>Spread (asc)</option>
-              <option>Time (newest)</option>
-              <option>Age (oldest)</option>
-            </select>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-xs text-muted-foreground sm:text-sm">Sort by:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="rounded-md border border-border bg-input px-2 py-1 text-sm text-foreground"
+                >
+                  <option>Spread (desc)</option>
+                  <option>Spread (asc)</option>
+                  <option>Time (newest)</option>
+                  <option>Age (oldest)</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -194,7 +182,7 @@ export default function LiveAlertsPage() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             </div>
-            <h3 className="text-sm font-semibold text-foreground">Active Alerts - Updating live</h3>
+            <h3 className="text-sm font-semibold text-foreground">Active Alerts — Updating live</h3>
           </div>
           <DataTable
             data={sortedData}

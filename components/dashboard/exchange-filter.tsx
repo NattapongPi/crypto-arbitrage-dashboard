@@ -12,13 +12,13 @@ interface ExchangeFilterProps {
 
 export function ExchangeFilter({ selected, onSelect }: ExchangeFilterProps) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
       {exchanges.map((ex) => (
         <button
           key={ex}
           onClick={() => onSelect(ex)}
           className={cn(
-            'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+            'shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
             selected === ex
               ? 'bg-primary text-primary-foreground'
               : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'

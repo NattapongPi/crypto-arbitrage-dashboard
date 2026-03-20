@@ -52,6 +52,7 @@ export default function CalendarSpreadPage() {
     {
       key: 'annReturn',
       header: 'Ann. Return',
+      mobileHidden: true,
       render: (item: CalendarSpreadPair) => (
         <span className="font-mono tabular-nums text-emerald-400">{item.annReturn}</span>
       ),
@@ -59,6 +60,7 @@ export default function CalendarSpreadPage() {
     {
       key: 'feeAdjPnl',
       header: 'Fee-Adj PnL',
+      mobileHidden: true,
       render: (item: CalendarSpreadPair) => (
         <span className={cn(
           'font-mono tabular-nums',

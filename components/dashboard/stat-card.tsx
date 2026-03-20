@@ -54,25 +54,32 @@ export function StatCard({ label, value, variant = 'cyan', className }: StatCard
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center rounded-xl border px-6 py-4',
+        'flex flex-col items-center justify-center rounded-xl border px-4 py-3 sm:px-6 sm:py-4',
         styles.bg,
         styles.border,
         className
       )}
     >
-      <span className={cn('text-xs font-medium uppercase tracking-wide', styles.label)}>
+      <span className={cn('text-center text-xs font-medium uppercase leading-tight tracking-wide', styles.label)}>
         {label}
       </span>
-      <span className={cn('mt-1 text-2xl font-bold tabular-nums', styles.text)}>
+      <span className={cn('mt-1 text-xl font-bold tabular-nums sm:text-2xl', styles.text)}>
         {value}
       </span>
     </div>
   )
 }
 
-export function StatCardRow({ children }: { children: React.ReactNode }) {
+export function StatCardRow({ children, cols5 }: { children: React.ReactNode; cols5?: boolean }) {
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
+    <div
+      className={cn(
+        'grid gap-3 sm:gap-4',
+        cols5
+          ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+          : 'grid-cols-2 sm:grid-cols-4'
+      )}
+    >
       {children}
     </div>
   )

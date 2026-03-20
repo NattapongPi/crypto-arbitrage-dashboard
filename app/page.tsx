@@ -19,7 +19,7 @@ export default function OverviewPage() {
     <DashboardLayout title="Overview" subtitle="Real-time arbitrage opportunities across CEX markets">
       <div className="space-y-8">
         {/* Summary Stats */}
-        <StatCardRow>
+        <StatCardRow cols5>
           <StatCard label="Active Alerts" value={alertStats.activeNow} variant="green" />
           <StatCard label="Spot-Futures" value={alertStats.spotFutures} variant="cyan" />
           <StatCard label="Funding Rate" value={alertStats.fundingRate} variant="purple" />
@@ -114,12 +114,12 @@ export default function OverviewPage() {
             <div className="space-y-2">
               {liveAlertsData.slice(0, 3).map((item) => (
                 <div key={item.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-muted-foreground">{item.time}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="hidden text-xs font-mono text-muted-foreground sm:inline">{item.time}</span>
                     <span className="text-sm font-medium text-foreground">{item.exchange}</span>
                     <span className="text-sm text-muted-foreground">{item.pair}</span>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <span className="rounded bg-primary/20 px-1.5 py-0.5 text-xs text-primary">{item.strategy}</span>
                     <StatusBadge status={item.status} />
                   </div>
@@ -145,15 +145,15 @@ interface QuickAccessCardProps {
 function QuickAccessCard({ title, icon: Icon, href, stat, statLabel, children }: QuickAccessCardProps) {
   return (
     <div className="rounded-xl border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <span className="text-lg font-bold text-emerald-400">{stat}</span>
-            <span className="ml-2 text-xs text-muted-foreground">{statLabel}</span>
+        <div className="flex items-center gap-3">
+          <div>
+            <span className="text-base font-bold text-emerald-400 sm:text-lg">{stat}</span>
+            <span className="ml-1.5 text-xs text-muted-foreground">{statLabel}</span>
           </div>
           <Link 
             href={href}

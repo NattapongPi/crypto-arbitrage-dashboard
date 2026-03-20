@@ -35,6 +35,7 @@ export default function SpotFuturesPage() {
     {
       key: 'spotPrice',
       header: 'Spot Price',
+      mobileHidden: true,
       render: (item: SpotFuturesPair) => (
         <span className="font-mono tabular-nums text-foreground">
           {formatCurrency(item.spotPrice)}
@@ -44,6 +45,7 @@ export default function SpotFuturesPage() {
     {
       key: 'perpPrice',
       header: 'Perp Price',
+      mobileHidden: true,
       render: (item: SpotFuturesPair) => (
         <span className="font-mono tabular-nums text-foreground">
           {formatCurrency(item.perpPrice)}
@@ -65,6 +67,7 @@ export default function SpotFuturesPage() {
     {
       key: 'change1min',
       header: 'Chg 1min',
+      mobileHidden: true,
       render: (item: SpotFuturesPair) => (
         <span className={cn(
           'font-mono tabular-nums',

@@ -58,6 +58,7 @@ export default function FundingRatePage() {
     {
       key: 'predictedRate',
       header: 'Predicted',
+      mobileHidden: true,
       render: (item: FundingRatePair) => (
         <span className={cn(
           'font-mono tabular-nums',
@@ -70,6 +71,7 @@ export default function FundingRatePage() {
     {
       key: 'nextIn',
       header: 'Next In',
+      mobileHidden: true,
       render: (item: FundingRatePair) => (
         <span className="font-mono text-muted-foreground">{item.nextIn}</span>
       ),

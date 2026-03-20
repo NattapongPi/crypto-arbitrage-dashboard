@@ -14,6 +14,7 @@ interface Column<T> {
   key: keyof T | string
   header: string
   className?: string
+  mobileHidden?: boolean
   render?: (item: T) => React.ReactNode
 }
 
@@ -35,49 +36,59 @@ export function DataTable<T extends { id: string }>({
   return (
     <div className={cn('rounded-xl border border-border bg-card', className)}>
       {(title || headerAction) && (
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           {title && (
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           )}
-          {headerAction}
+          {headerAction && (
+            <div className="overflow-x-auto">{headerAction}</div>
+          )}
         </div>
       )}
-      <Table>
-        <TableHeader>
-          <TableRow className="border-b-2 border-primary/30 hover:bg-transparent">
-            {columns.map((col) => (
-              <TableHead
-                key={String(col.key)}
-                className={cn(
-                  'bg-primary/10 text-xs font-semibold uppercase tracking-wider text-primary-foreground/80',
-                  col.className
-                )}
-              >
-                {col.header}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.map((item) => (
-            <TableRow
-              key={item.id}
-              className="border-border/50 hover:bg-muted/30"
-            >
+      {/* Horizontal scroll wrapper for tables on mobile */}
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-b-2 border-primary/30 hover:bg-transparent">
               {columns.map((col) => (
-                <TableCell
-                  key={`${item.id}-${String(col.key)}`}
-                  className={cn('py-3 text-sm', col.className)}
+                <TableHead
+                  key={String(col.key)}
+                  className={cn(
+                    'bg-primary/10 text-xs font-semibold uppercase tracking-wider text-primary-foreground/80 whitespace-nowrap',
+                    col.mobileHidden && 'hidden md:table-cell',
+                    col.className
+                  )}
                 >
-                  {col.render
-                    ? col.render(item)
-                    : String(item[col.key as keyof T] ?? '')}
-                </TableCell>
+                  {col.header}
+                </TableHead>
               ))}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {data.map((item) => (
+              <TableRow
+                key={item.id}
+                className="border-border/50 hover:bg-muted/30"
+              >
+                {columns.map((col) => (
+                  <TableCell
+                    key={`${item.id}-${String(col.key)}`}
+                    className={cn(
+                      'py-3 text-sm whitespace-nowrap',
+                      col.mobileHidden && 'hidden md:table-cell',
+                      col.className
+                    )}
+                  >
+                    {col.render
+                      ? col.render(item)
+                      : String(item[col.key as keyof T] ?? '')}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }
