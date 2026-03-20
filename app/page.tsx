@@ -1,110 +1,185 @@
-import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
-import { StatCard, StatCardRow } from '@/components/dashboard/stat-card'
-import { 
-  spotFuturesStats, 
-  fundingStats, 
-  calendarStats, 
-  alertStats,
-  spotFuturesData,
-  fundingRateData,
-  calendarSpreadData,
-  liveAlertsData
-} from '@/lib/mock-data'
-import Link from 'next/link'
-import { ArrowRight, TrendingUp, Clock, Calendar, Bell } from 'lucide-react'
-import { SignalBadge, StatusBadge } from '@/components/dashboard/signal-badge'
+"use client";
+
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { StatCard, StatCardRow } from "@/components/dashboard/stat-card";
+import { SignalBadge, StatusBadge } from "@/components/dashboard/signal-badge";
+import { useMarketDataContext } from "@/lib/context/market-data-context";
+import { formatPercent, formatTime } from "@/lib/formatters";
+import Link from "next/link";
+import { ArrowRight, TrendingUp, Clock, Calendar, Bell } from "lucide-react";
 
 export default function OverviewPage() {
+  const {
+    alertStats,
+    spotFuturesData,
+    fundingRateData,
+    calendarSpreadData,
+    alerts,
+    spotFuturesStats,
+    fundingStats,
+    calendarStats,
+    isConnecting,
+  } = useMarketDataContext();
+
   return (
-    <DashboardLayout title="Overview" subtitle="Real-time arbitrage opportunities across CEX markets">
+    <DashboardLayout
+      title="Overview"
+      subtitle={
+        isConnecting
+          ? "Connecting to exchanges…"
+          : "Real-time arbitrage opportunities across CEX markets"
+      }
+    >
       <div className="space-y-8">
         {/* Summary Stats */}
         <StatCardRow cols5>
-          <StatCard label="Active Alerts" value={alertStats.activeNow} variant="green" />
-          <StatCard label="Spot-Futures" value={alertStats.spotFutures} variant="cyan" />
-          <StatCard label="Funding Rate" value={alertStats.fundingRate} variant="purple" />
-          <StatCard label="Calendar Spread" value={alertStats.calendarSpread} variant="yellow" />
+          <StatCard
+            label="Active Alerts"
+            value={alertStats.activeNow}
+            variant="green"
+          />
+          <StatCard
+            label="Spot-Futures"
+            value={alertStats.spotFutures}
+            variant="cyan"
+          />
+          <StatCard
+            label="Funding Rate"
+            value={alertStats.fundingRate}
+            variant="purple"
+          />
+          <StatCard
+            label="Calendar Spread"
+            value={alertStats.calendarSpread}
+            variant="yellow"
+          />
           <StatCard label="Fading" value={alertStats.fading} variant="red" />
         </StatCardRow>
 
         {/* Quick Access Cards */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Spot-Futures Preview */}
-          <QuickAccessCard 
+          <QuickAccessCard
             title="Spot-Futures Basis"
             icon={TrendingUp}
             href="/spot-futures"
-            stat={spotFuturesStats.bestBasis}
+            stat={formatPercent(spotFuturesStats.bestBasis)}
             statLabel="Best Basis"
           >
             <div className="space-y-2">
               {spotFuturesData.slice(0, 3).map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2"
+                >
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-foreground">{item.exchange}</span>
-                    <span className="text-sm text-muted-foreground">{item.pair}</span>
+                    <span className="text-sm font-medium text-foreground">
+                      {item.exchange}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {item.pair}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-mono tabular-nums text-emerald-400">+{item.basisPercent.toFixed(2)}%</span>
-                    <SignalBadge signal={item.signal} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </QuickAccessCard>
-
-          {/* Funding Rate Preview */}
-          <QuickAccessCard 
-            title="Funding Rate"
-            icon={Clock}
-            href="/funding-rate"
-            stat={fundingStats.bestAnnualized}
-            statLabel="Best Annualized"
-          >
-            <div className="space-y-2">
-              {fundingRateData.slice(0, 3).map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-foreground">{item.exchange}</span>
-                    <span className="text-sm text-muted-foreground">{item.pair}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-sm font-mono tabular-nums ${item.annualized >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {item.annualized >= 0 ? '+' : ''}{item.annualized.toFixed(1)}%
+                    <span
+                      className={`text-sm font-mono tabular-nums ${item.basisPercent >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                    >
+                      {formatPercent(item.basisPercent)}
                     </span>
                     <SignalBadge signal={item.signal} />
                   </div>
                 </div>
               ))}
+              {spotFuturesData.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Waiting for data…
+                </p>
+              )}
             </div>
           </QuickAccessCard>
 
-          {/* Calendar Spread Preview */}
-          <QuickAccessCard 
-            title="Calendar Spread"
-            icon={Calendar}
-            href="/calendar-spread"
-            stat={calendarStats.bestSpread}
-            statLabel="Best Spread"
+          {/* Funding Rate Preview */}
+          <QuickAccessCard
+            title="Funding Rate"
+            icon={Clock}
+            href="/funding-rate"
+            stat={formatPercent(fundingStats.bestAnnualized, 1)}
+            statLabel="Best Annualized"
           >
             <div className="space-y-2">
-              {calendarSpreadData.slice(0, 3).map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+              {fundingRateData.slice(0, 3).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2"
+                >
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-foreground">{item.exchange}</span>
-                    <span className="text-sm text-muted-foreground">{item.asset} {item.nearLeg}/{item.farLeg}</span>
+                    <span className="text-sm font-medium text-foreground">
+                      {item.exchange}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {item.pair}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-mono tabular-nums text-emerald-400">+{item.spreadPercent.toFixed(2)}%</span>
+                    <span
+                      className={`text-sm font-mono tabular-nums ${item.annualized >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                    >
+                      {formatPercent(item.annualized, 1)}
+                    </span>
                     <SignalBadge signal={item.signal} />
                   </div>
                 </div>
               ))}
+              {fundingRateData.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Waiting for data…
+                </p>
+              )}
+            </div>
+          </QuickAccessCard>
+
+          {/* Calendar Spread Preview */}
+          <QuickAccessCard
+            title="Calendar Spread"
+            icon={Calendar}
+            href="/calendar-spread"
+            stat={formatPercent(calendarStats.bestSpread)}
+            statLabel="Best Spread"
+          >
+            <div className="space-y-2">
+              {calendarSpreadData.slice(0, 3).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-foreground">
+                      {item.exchange}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {item.asset} {item.nearLeg}/{item.farLeg}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`text-sm font-mono tabular-nums ${item.spreadPercent >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                    >
+                      {formatPercent(item.spreadPercent)}
+                    </span>
+                    <SignalBadge signal={item.signal} />
+                  </div>
+                </div>
+              ))}
+              {calendarSpreadData.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Waiting for futures data…
+                </p>
+              )}
             </div>
           </QuickAccessCard>
 
           {/* Live Alerts Preview */}
-          <QuickAccessCard 
+          <QuickAccessCard
             title="Live Alerts"
             icon={Bell}
             href="/live-alerts"
@@ -112,37 +187,60 @@ export default function OverviewPage() {
             statLabel="Active Now"
           >
             <div className="space-y-2">
-              {liveAlertsData.slice(0, 3).map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+              {alerts.slice(0, 3).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2"
+                >
                   <div className="flex items-center gap-2">
-                    <span className="hidden text-xs font-mono text-muted-foreground sm:inline">{item.time}</span>
-                    <span className="text-sm font-medium text-foreground">{item.exchange}</span>
-                    <span className="text-sm text-muted-foreground">{item.pair}</span>
+                    <span className="hidden text-xs font-mono text-muted-foreground sm:inline">
+                      {formatTime(item.createdAt)}
+                    </span>
+                    <span className="text-sm font-medium text-foreground">
+                      {item.exchange}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {item.pair}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-primary/20 px-1.5 py-0.5 text-xs text-primary">{item.strategy}</span>
+                    <span className="rounded bg-primary/20 px-1.5 py-0.5 text-xs text-primary">
+                      {item.strategy}
+                    </span>
                     <StatusBadge status={item.status} />
                   </div>
                 </div>
               ))}
+              {alerts.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  No active alerts yet…
+                </p>
+              )}
             </div>
           </QuickAccessCard>
         </div>
       </div>
     </DashboardLayout>
-  )
+  );
 }
 
 interface QuickAccessCardProps {
-  title: string
-  icon: React.ElementType
-  href: string
-  stat: string
-  statLabel: string
-  children: React.ReactNode
+  title: string;
+  icon: React.ElementType;
+  href: string;
+  stat: string;
+  statLabel: string;
+  children: React.ReactNode;
 }
 
-function QuickAccessCard({ title, icon: Icon, href, stat, statLabel, children }: QuickAccessCardProps) {
+function QuickAccessCard({
+  title,
+  icon: Icon,
+  href,
+  stat,
+  statLabel,
+  children,
+}: QuickAccessCardProps) {
   return (
     <div className="rounded-xl border border-border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
@@ -152,10 +250,14 @@ function QuickAccessCard({ title, icon: Icon, href, stat, statLabel, children }:
         </div>
         <div className="flex items-center gap-3">
           <div>
-            <span className="text-base font-bold text-emerald-400 sm:text-lg">{stat}</span>
-            <span className="ml-1.5 text-xs text-muted-foreground">{statLabel}</span>
+            <span className="text-base font-bold text-emerald-400 sm:text-lg">
+              {stat}
+            </span>
+            <span className="ml-1.5 text-xs text-muted-foreground">
+              {statLabel}
+            </span>
           </div>
-          <Link 
+          <Link
             href={href}
             className="flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
           >
@@ -164,9 +266,7 @@ function QuickAccessCard({ title, icon: Icon, href, stat, statLabel, children }:
           </Link>
         </div>
       </div>
-      <div className="p-4">
-        {children}
-      </div>
+      <div className="p-4">{children}</div>
     </div>
-  )
+  );
 }

@@ -5,28 +5,25 @@ import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { StatCard, StatCardRow } from '@/components/dashboard/stat-card'
 import { DataTable } from '@/components/dashboard/data-table'
 import { SignalBadge } from '@/components/dashboard/signal-badge'
-import { fundingRateData, fundingStats } from '@/lib/mock-data'
+import { useMarketDataContext } from '@/lib/context/market-data-context'
+import { formatRate, formatPercent, formatCountdown, formatOI } from '@/lib/formatters'
 import type { FundingRatePair } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export default function FundingRatePage() {
-  const [countdown, setCountdown] = useState(fundingStats.nextSettlement)
+  const { fundingRateData, fundingStats } = useMarketDataContext()
 
-  // Simulate countdown timer
+  // Countdown driven by the real next funding time
+  const [countdown, setCountdown] = useState('--:--:--')
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCountdown(prev => {
-        const [h, m, s] = prev.split(':').map(Number)
-        let totalSeconds = h * 3600 + m * 60 + s - 1
-        if (totalSeconds <= 0) totalSeconds = 8 * 3600 // Reset to 8 hours
-        const hours = Math.floor(totalSeconds / 3600)
-        const minutes = Math.floor((totalSeconds % 3600) / 60)
-        const seconds = totalSeconds % 60
-        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [])
+    function tick() {
+      if (!fundingStats.nextFundingTime) return
+      setCountdown(formatCountdown(fundingStats.nextFundingTime))
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [fundingStats.nextFundingTime])
 
   const columns = [
     {
@@ -47,11 +44,8 @@ export default function FundingRatePage() {
       key: 'currentRate',
       header: 'Current Rate',
       render: (item: FundingRatePair) => (
-        <span className={cn(
-          'font-mono tabular-nums font-medium',
-          item.currentRate >= 0 ? 'text-emerald-400' : 'text-red-400'
-        )}>
-          {item.currentRate >= 0 ? '+' : ''}{item.currentRate.toFixed(3)}%
+        <span className={cn('font-mono tabular-nums font-medium', item.currentRate >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+          {formatRate(item.currentRate)}
         </span>
       ),
     },
@@ -60,39 +54,42 @@ export default function FundingRatePage() {
       header: 'Predicted',
       mobileHidden: true,
       render: (item: FundingRatePair) => (
-        <span className={cn(
-          'font-mono tabular-nums',
-          item.predictedRate >= 0 ? 'text-emerald-400' : 'text-red-400'
-        )}>
-          {item.predictedRate >= 0 ? '+' : ''}{item.predictedRate.toFixed(3)}%
-        </span>
+        item.predictedRate !== undefined ? (
+          <span className={cn('font-mono tabular-nums', item.predictedRate >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+            {formatRate(item.predictedRate)}
+          </span>
+        ) : (
+          <span className="font-mono text-muted-foreground">--</span>
+        )
       ),
     },
     {
-      key: 'nextIn',
+      key: 'nextFundingTime',
       header: 'Next In',
       mobileHidden: true,
       render: (item: FundingRatePair) => (
-        <span className="font-mono text-muted-foreground">{item.nextIn}</span>
+        <span className="font-mono text-muted-foreground">
+          {item.nextFundingTime ? formatCountdown(item.nextFundingTime) : '--'}
+        </span>
       ),
     },
     {
       key: 'annualized',
       header: 'Annualized',
       render: (item: FundingRatePair) => (
-        <span className={cn(
-          'font-mono tabular-nums font-medium',
-          item.annualized >= 0 ? 'text-emerald-400' : 'text-red-400'
-        )}>
-          {item.annualized >= 0 ? '+' : ''}{item.annualized.toFixed(1)}%
+        <span className={cn('font-mono tabular-nums font-medium', item.annualized >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+          {formatPercent(item.annualized, 1)}
         </span>
       ),
     },
     {
       key: 'openInterest',
       header: 'Open Interest',
+      mobileHidden: true,
       render: (item: FundingRatePair) => (
-        <span className="font-mono text-foreground">{item.openInterest}</span>
+        <span className="font-mono text-foreground">
+          {item.openInterest !== undefined ? formatOI(item.openInterest) : '--'}
+        </span>
       ),
     },
     {
@@ -103,41 +100,19 @@ export default function FundingRatePage() {
   ]
 
   return (
-    <DashboardLayout 
-      title="Funding Rate" 
-      subtitle={`Next settlement in ${countdown}`}
+    <DashboardLayout
+      title="Funding Rate"
+      subtitle={fundingStats.nextFundingTime ? `Next settlement in ${countdown}` : 'Connecting…'}
     >
       <div className="space-y-6">
-        {/* Stats Row */}
         <StatCardRow>
-          <StatCard
-            label="Highest Rate Now"
-            value={fundingStats.highestRate}
-            variant="green"
-          />
-          <StatCard
-            label="Best Annualized"
-            value={fundingStats.bestAnnualized}
-            variant="cyan"
-          />
-          <StatCard
-            label="Lowest (short opp)"
-            value={fundingStats.lowestRate}
-            variant="purple"
-          />
-          <StatCard
-            label="Next Settlement"
-            value={countdown}
-            variant="yellow"
-          />
+          <StatCard label="Highest Rate Now" value={formatRate(fundingStats.highestRate)} variant="green" />
+          <StatCard label="Best Annualized" value={formatPercent(fundingStats.bestAnnualized, 1)} variant="cyan" />
+          <StatCard label="Lowest (short opp)" value={formatRate(fundingStats.lowestRate)} variant="purple" />
+          <StatCard label="Next Settlement" value={countdown} variant="yellow" />
         </StatCardRow>
 
-        {/* Data Table */}
-        <DataTable
-          data={fundingRateData}
-          columns={columns}
-          title="Live Funding Rates - All Pairs"
-        />
+        <DataTable data={fundingRateData} columns={columns} title="Live Funding Rates — All Pairs" />
       </div>
     </DashboardLayout>
   )

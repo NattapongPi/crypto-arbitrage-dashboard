@@ -5,35 +5,44 @@ import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { StatCard, StatCardRow } from '@/components/dashboard/stat-card'
 import { DataTable } from '@/components/dashboard/data-table'
 import { StatusBadge } from '@/components/dashboard/signal-badge'
-import { liveAlertsData, alertStats } from '@/lib/mock-data'
+import { useMarketDataContext } from '@/lib/context/market-data-context'
+import { formatPercent, formatAge, formatTime } from '@/lib/formatters'
 import type { LiveAlert, StrategyType } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 
 const strategies: (StrategyType | 'All')[] = ['All', 'Spot-Fut', 'Funding', 'Calendar']
 
+type SortOption = 'Spread (desc)' | 'Spread (asc)' | 'Time (newest)' | 'Age (oldest)'
+
 export default function LiveAlertsPage() {
+  const { alerts, alertStats } = useMarketDataContext()
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyType | 'All'>('All')
   const [minSpread, setMinSpread] = useState('0.20')
-  const [sortBy, setSortBy] = useState('Spread (desc)')
+  const [sortBy, setSortBy] = useState<SortOption>('Spread (desc)')
 
-  const filteredData = selectedStrategy === 'All'
-    ? liveAlertsData
-    : liveAlertsData.filter(item => item.strategy === selectedStrategy)
+  const minSpreadNum = parseFloat(minSpread) || 0
+
+  const filteredData = alerts.filter((item) => {
+    if (selectedStrategy !== 'All' && item.strategy !== selectedStrategy) return false
+    if (item.spread < minSpreadNum) return false
+    return true
+  })
 
   const sortedData = [...filteredData].sort((a, b) => {
-    const spreadA = parseFloat(a.spread.replace('%', '').replace('+', ''))
-    const spreadB = parseFloat(b.spread.replace('%', '').replace('+', ''))
-    return sortBy === 'Spread (desc)' ? spreadB - spreadA : spreadA - spreadB
+    if (sortBy === 'Spread (desc)') return b.spread - a.spread
+    if (sortBy === 'Spread (asc)') return a.spread - b.spread
+    if (sortBy === 'Time (newest)') return b.createdAt - a.createdAt
+    if (sortBy === 'Age (oldest)') return a.createdAt - b.createdAt
+    return 0
   })
 
   const columns = [
     {
-      key: 'time',
+      key: 'createdAt',
       header: 'Time',
       mobileHidden: true,
       render: (item: LiveAlert) => (
-        <span className="font-mono text-sm text-muted-foreground">{item.time}</span>
+        <span className="font-mono text-sm text-muted-foreground">{formatTime(item.createdAt)}</span>
       ),
     },
     {
@@ -68,8 +77,8 @@ export default function LiveAlertsPage() {
       key: 'spread',
       header: 'Spread',
       render: (item: LiveAlert) => (
-        <span className="font-mono tabular-nums font-medium text-emerald-400">
-          {item.spread}
+        <span className={cn('font-mono tabular-nums font-medium', item.spread >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+          {formatPercent(item.spread)}
         </span>
       ),
     },
@@ -78,43 +87,34 @@ export default function LiveAlertsPage() {
       header: 'Fee-Adj PnL',
       mobileHidden: true,
       render: (item: LiveAlert) => (
-        <span className="font-mono tabular-nums text-emerald-400">{item.feeAdjPnl}</span>
+        <span className={cn('font-mono tabular-nums', item.feeAdjPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+          {formatPercent(item.feeAdjPnl)}
+        </span>
       ),
     },
     {
       key: 'age',
       header: 'Age',
       mobileHidden: true,
-      render: (item: LiveAlert) => (
-        <span className={cn(
-          'font-mono text-sm',
-          item.age.includes('m') ? 'text-yellow-400' : 'text-muted-foreground'
-        )}>
-          {item.age}
-        </span>
-      ),
+      render: (item: LiveAlert) => {
+        const age = formatAge(item.createdAt)
+        return (
+          <span className={cn('font-mono text-sm', age.includes('m') ? 'text-yellow-400' : 'text-muted-foreground')}>
+            {age}
+          </span>
+        )
+      },
     },
     {
       key: 'status',
       header: 'Status',
       render: (item: LiveAlert) => <StatusBadge status={item.status} />,
     },
-    {
-      key: 'action',
-      header: 'Action',
-      mobileHidden: true,
-      render: () => (
-        <Button variant="outline" size="sm" className="h-7 text-xs">
-          View Details
-        </Button>
-      ),
-    },
   ]
 
   return (
     <DashboardLayout title="Live Alerts" subtitle="Dashboard">
       <div className="space-y-4 sm:space-y-6">
-        {/* Stats Row */}
         <StatCardRow cols5>
           <StatCard label="Active Now" value={alertStats.activeNow} variant="green" />
           <StatCard label="Spot-Futures" value={alertStats.spotFutures} variant="cyan" />
@@ -126,7 +126,6 @@ export default function LiveAlertsPage() {
         {/* Filters */}
         <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
           <div className="flex flex-wrap items-center gap-3">
-            {/* Strategy filter */}
             <div className="flex items-center gap-2">
               <span className="shrink-0 text-xs text-muted-foreground sm:text-sm">Filter:</span>
               <div className="flex items-center gap-1">
@@ -151,9 +150,11 @@ export default function LiveAlertsPage() {
               <div className="flex items-center gap-2">
                 <span className="shrink-0 text-xs text-muted-foreground sm:text-sm">Min Spread:</span>
                 <input
-                  type="text"
+                  type="number"
                   value={minSpread}
                   onChange={(e) => setMinSpread(e.target.value)}
+                  step="0.05"
+                  min="0"
                   className="w-20 rounded-md border border-border bg-input px-2 py-1 text-sm text-foreground"
                 />
               </div>
@@ -162,7 +163,7 @@ export default function LiveAlertsPage() {
                 <span className="shrink-0 text-xs text-muted-foreground sm:text-sm">Sort by:</span>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
                   className="rounded-md border border-border bg-input px-2 py-1 text-sm text-foreground"
                 >
                   <option>Spread (desc)</option>
@@ -184,11 +185,7 @@ export default function LiveAlertsPage() {
             </div>
             <h3 className="text-sm font-semibold text-foreground">Active Alerts — Updating live</h3>
           </div>
-          <DataTable
-            data={sortedData}
-            columns={columns}
-            className="border-0 rounded-t-none"
-          />
+          <DataTable data={sortedData} columns={columns} className="border-0 rounded-t-none" />
         </div>
       </div>
     </DashboardLayout>

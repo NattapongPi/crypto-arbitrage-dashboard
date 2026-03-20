@@ -1,35 +1,81 @@
-# crypto-arbitrage-dashboard
+# ArbRadar — Crypto Arbitrage Dashboard
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+A real-time cryptocurrency arbitrage opportunity dashboard monitoring spot-futures basis, funding rates, and calendar spreads across major CEX markets.
 
-## Built with v0
+## Features
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+- **Spot-Futures Basis** — Track spread between spot and perpetual futures prices across 9 pairs
+- **Funding Rate Monitor** — Live & predicted funding rates with annualized return calculations
+- **Calendar Spread** — Near/far leg spread analysis with term structure chart and spread matrix
+- **Live Alerts** — Real-time opportunity alerts filterable by strategy, exchange, and min spread threshold
+- **Exchange Health Bar** — Latency and status tracking for all connected exchanges
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_mGdMYBI86gWYm6dqKYPvb5rBGmc9)
+## Exchanges
+
+| Exchange | Status | Latency |
+| -------- | ------ | ------- |
+| Binance  | LIVE   | 45ms    |
+| Bybit    | LIVE   | 52ms    |
+| OKX      | SLOW   | 180ms   |
+| Deribit  | LIVE   | 38ms    |
+
+## Pages
+
+| Route              | Description                                                                |
+| ------------------ | -------------------------------------------------------------------------- |
+| `/`                | Overview — summary stats and quick-access cards for each strategy          |
+| `/spot-futures`    | Spot vs. perp price basis, fee-adjusted PnL, exchange filter               |
+| `/funding-rate`    | Current/predicted rates, annualized returns, OI, next settlement countdown |
+| `/calendar-spread` | Expiry spread analysis, term structure chart, spread matrix                |
+| `/live-alerts`     | Sortable/filterable alert feed with ACTIVE / WATCH / FADING status         |
+| `/settings`        | Configuration                                                              |
+
+## Trading Pairs
+
+`BTC-PERP` · `ETH-PERP` · `SOL-PERP` · `BNB-PERP`
+Dated contracts: `28-Mar` · `26-Jun` · `26-Sep`
+
+## Signal Types
+
+| Signal      | Meaning                                              |
+| ----------- | ---------------------------------------------------- |
+| `BUY BASIS` | Strong positive basis — enter long spot / short perp |
+| `LONG SPOT` | Spot underpriced relative to perp                    |
+| `ENTER`     | Funding or calendar opportunity — enter now          |
+| `WATCH`     | Opportunity forming — monitor closely                |
+| `INVERTED`  | Basis inverted — negative carry                      |
+| `SHORT OPP` | Short-side opportunity                               |
+| `SKIP`      | Spread below threshold after fees                    |
+
+## Data Model
+
+Key types from `lib/types.ts`:
+
+- `SpotFuturesPair` — `spotPrice`, `perpPrice`, `basisPercent`, `change1min`, `feeAdjPnl`, `signal`
+- `FundingRatePair` — `currentRate`, `predictedRate`, `annualized`, `openInterest`, `nextIn`, `signal`
+- `CalendarSpreadPair` — `asset`, `nearLeg`, `farLeg`, `spreadPercent`, `annReturn`, `feeAdjPnl`, `signal`
+- `LiveAlert` — `time`, `exchange`, `pair`, `strategy`, `spread`, `feeAdjPnl`, `age`, `status`
+
+Mock data lives in `lib/mock-data.ts` and is ready to be swapped for a live data feed.
+
+## Tech Stack
+
+- [Next.js](https://nextjs.org) (App Router)
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- Space Grotesk + IBM Plex Mono (fonts)
+- Vercel Analytics
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deployment
 
-## Learn More
-
-To learn more, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
-
-<a href="https://v0.app/chat/api/kiro/clone/NattapongPi/crypto-arbitrage-dashboard" alt="Open in Kiro"><img src="https://pdgvvgmkdvyeydso.public.blob.vercel-storage.com/open%20in%20kiro.svg?sanitize=true" /></a>
+Every merge to `main` auto-deploys via Vercel.

@@ -1,7 +1,8 @@
-// Exchange types
+// ─── Exchange & Status ───────────────────────────────────────────────────────
+
 export type Exchange = 'Binance' | 'Bybit' | 'OKX' | 'Deribit'
 
-export type ExchangeStatus = 'LIVE' | 'SLOW' | 'OFFLINE'
+export type ExchangeStatus = 'LIVE' | 'SLOW' | 'OFFLINE' | 'CONNECTING'
 
 export interface ExchangeHealth {
   exchange: Exchange
@@ -9,21 +10,23 @@ export interface ExchangeHealth {
   latency?: number
 }
 
-// Signal types for trading recommendations
-export type Signal = 
-  | 'BUY BASIS' 
-  | 'WATCH' 
-  | 'INVERTED' 
-  | 'SKIP' 
-  | 'LONG SPOT' 
-  | 'SHORT OPP' 
+// ─── Signal & Alert ──────────────────────────────────────────────────────────
+
+export type Signal =
+  | 'BUY BASIS'
+  | 'WATCH'
+  | 'INVERTED'
+  | 'SKIP'
+  | 'LONG SPOT'
+  | 'SHORT OPP'
   | 'ENTER'
 
 export type AlertStatus = 'ACTIVE' | 'WATCH' | 'FADING'
 
 export type StrategyType = 'Spot-Fut' | 'Funding' | 'Calendar'
 
-// Spot-Futures Basis types
+// ─── UI Data Types (consumed by pages) ───────────────────────────────────────
+
 export interface SpotFuturesPair {
   id: string
   exchange: Exchange
@@ -36,28 +39,29 @@ export interface SpotFuturesPair {
   signal: Signal
 }
 
-// Funding Rate types
 export interface FundingRatePair {
   id: string
   exchange: Exchange
   pair: string
   currentRate: number
-  predictedRate: number
-  nextIn: string
+  predictedRate?: number      // Not all exchanges provide this
+  nextFundingTime: number     // Unix ms timestamp
   annualized: number
-  openInterest: string
+  openInterest?: number       // Raw USD value
   signal: Signal
 }
 
-// Calendar Spread types
 export interface CalendarSpreadPair {
   id: string
   exchange: Exchange
   asset: string
-  nearLeg: string
-  farLeg: string
+  nearLeg: string             // Display label e.g. "28-Mar"
+  farLeg: string              // Display label e.g. "26-Jun"
+  nearPrice: number
+  farPrice: number
   spreadPercent: number
-  annReturn: string
+  annReturn: number           // Raw percentage
+  daysToExpiry: number
   feeAdjPnl: number
   signal: Signal
 }
@@ -65,8 +69,8 @@ export interface CalendarSpreadPair {
 export interface SpreadMatrixEntry {
   nearLeg: string
   farLeg: string
-  spread: string
-  dte: string
+  spread: number              // Raw percentage
+  dte: string                 // Display string e.g. "8/98"
 }
 
 export interface TermStructurePoint {
@@ -75,36 +79,35 @@ export interface TermStructurePoint {
   label: string
 }
 
-// Live Alerts types
 export interface LiveAlert {
   id: string
-  time: string
+  createdAt: number           // Unix ms timestamp
   exchange: Exchange
   pair: string
   strategy: StrategyType
-  spread: string
-  feeAdjPnl: string
-  age: string
+  spread: number              // Raw percentage
+  feeAdjPnl: number           // Raw percentage
   status: AlertStatus
 }
 
-// Dashboard summary stats
-export interface DashboardStats {
+// ─── Dashboard Stats ──────────────────────────────────────────────────────────
+
+export interface SpotFuturesStats {
   activeOpportunities: number
-  bestBasis: string
+  bestBasis: number           // Raw percentage
   pairsMonitored: number
-  feeAdjThreshold: string
+  feeAdjThreshold: number     // Raw percentage
 }
 
 export interface FundingStats {
-  highestRate: string
-  bestAnnualized: string
-  lowestRate: string
-  nextSettlement: string
+  highestRate: number         // Raw percentage
+  bestAnnualized: number      // Raw percentage
+  lowestRate: number          // Raw percentage
+  nextFundingTime: number     // Unix ms — nearest across all pairs
 }
 
 export interface CalendarStats {
-  bestSpread: string
+  bestSpread: number          // Raw percentage
   activeSpreads: number
   pairsMonitored: number
   nearestExpiry: string
@@ -117,4 +120,81 @@ export interface AlertStats {
   fundingRate: number
   calendarSpread: number
   fading: number
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+export interface UserSettings {
+  fees: {
+    makerFeePercent: number
+    takerFeePercent: number
+    withdrawalFeeUsd: number
+  }
+  thresholds: {
+    minBasisPercent: number
+    minAnnualizedPercent: number
+    minSpreadPercent: number
+  }
+  exchanges: Record<Exchange, boolean>
+}
+
+// ─── Raw Data from Adapters ────────────────────────────────────────────────────
+
+export type TickerType = 'spot' | 'perp' | 'future'
+
+export interface NormalizedTicker {
+  exchange: Exchange
+  baseAsset: string           // e.g. "BTC", "ETH"
+  type: TickerType
+  expiry?: string             // ISO date string for futures e.g. "2025-06-27"
+  expiryLabel?: string        // Display label e.g. "27-Jun"
+  lastPrice: number
+  timestamp: number           // Unix ms
+}
+
+export interface NormalizedFundingRate {
+  exchange: Exchange
+  baseAsset: string
+  fundingRate: number         // e.g. 0.041 means 0.041%
+  predictedRate?: number
+  nextFundingTime: number     // Unix ms
+  openInterest?: number       // Raw USD
+}
+
+// ─── Instruments ──────────────────────────────────────────────────────────────
+
+export interface FuturesContract {
+  symbol: string              // Exchange-specific e.g. "BTCUSDT_250627"
+  expiry: string              // ISO date string
+  expiryLabel: string         // Display label e.g. "27-Jun"
+}
+
+export interface InstrumentInfo {
+  exchange: Exchange
+  baseAsset: string           // e.g. "BTC"
+  spotSymbol?: string         // Exchange-specific spot symbol
+  perpSymbol?: string         // Exchange-specific perpetual symbol
+  futuresContracts: FuturesContract[]
+  volume24hUsd: number        // For sorting top pairs
+}
+
+// ─── Price Buffer (for 1-min change tracking) ────────────────────────────────
+
+export interface PriceSnapshot {
+  price: number
+  timestamp: number
+}
+
+// ─── Exchange Adapter Interface ───────────────────────────────────────────────
+
+export interface AdapterCallbacks {
+  onTicker: (ticker: NormalizedTicker) => void
+  onFunding: (funding: NormalizedFundingRate) => void
+  onStatusChange: (exchange: Exchange, status: ExchangeStatus, latency?: number) => void
+}
+
+export interface ExchangeAdapter {
+  exchange: Exchange
+  connect(instruments: InstrumentInfo[], callbacks: AdapterCallbacks): void
+  disconnect(): void
 }

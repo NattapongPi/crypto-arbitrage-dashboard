@@ -6,16 +6,19 @@ import { StatCard, StatCardRow } from '@/components/dashboard/stat-card'
 import { DataTable } from '@/components/dashboard/data-table'
 import { SignalBadge } from '@/components/dashboard/signal-badge'
 import { ExchangeFilter } from '@/components/dashboard/exchange-filter'
-import { spotFuturesData, spotFuturesStats, formatCurrency } from '@/lib/mock-data'
+import { useMarketDataContext } from '@/lib/context/market-data-context'
+import { formatPrice, formatPercent } from '@/lib/formatters'
 import type { Exchange, SpotFuturesPair } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export default function SpotFuturesPage() {
+  const { spotFuturesData, spotFuturesStats } = useMarketDataContext()
   const [selectedExchange, setSelectedExchange] = useState<Exchange | 'All'>('All')
 
-  const filteredData = selectedExchange === 'All'
-    ? spotFuturesData
-    : spotFuturesData.filter(item => item.exchange === selectedExchange)
+  const filteredData =
+    selectedExchange === 'All'
+      ? spotFuturesData
+      : spotFuturesData.filter((item) => item.exchange === selectedExchange)
 
   const columns = [
     {
@@ -37,9 +40,7 @@ export default function SpotFuturesPage() {
       header: 'Spot Price',
       mobileHidden: true,
       render: (item: SpotFuturesPair) => (
-        <span className="font-mono tabular-nums text-foreground">
-          {formatCurrency(item.spotPrice)}
-        </span>
+        <span className="font-mono tabular-nums text-foreground">{formatPrice(item.spotPrice)}</span>
       ),
     },
     {
@@ -47,20 +48,15 @@ export default function SpotFuturesPage() {
       header: 'Perp Price',
       mobileHidden: true,
       render: (item: SpotFuturesPair) => (
-        <span className="font-mono tabular-nums text-foreground">
-          {formatCurrency(item.perpPrice)}
-        </span>
+        <span className="font-mono tabular-nums text-foreground">{formatPrice(item.perpPrice)}</span>
       ),
     },
     {
       key: 'basisPercent',
       header: 'Basis %',
       render: (item: SpotFuturesPair) => (
-        <span className={cn(
-          'font-mono tabular-nums font-medium',
-          item.basisPercent >= 0 ? 'text-emerald-400' : 'text-red-400'
-        )}>
-          {item.basisPercent >= 0 ? '+' : ''}{item.basisPercent.toFixed(2)}%
+        <span className={cn('font-mono tabular-nums font-medium', item.basisPercent >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+          {formatPercent(item.basisPercent)}
         </span>
       ),
     },
@@ -69,11 +65,8 @@ export default function SpotFuturesPage() {
       header: 'Chg 1min',
       mobileHidden: true,
       render: (item: SpotFuturesPair) => (
-        <span className={cn(
-          'font-mono tabular-nums',
-          item.change1min > 0 ? 'text-emerald-400' : item.change1min < 0 ? 'text-red-400' : 'text-muted-foreground'
-        )}>
-          {item.change1min > 0 ? '+' : ''}{item.change1min.toFixed(2)}%
+        <span className={cn('font-mono tabular-nums', item.change1min > 0 ? 'text-emerald-400' : item.change1min < 0 ? 'text-red-400' : 'text-muted-foreground')}>
+          {formatPercent(item.change1min)}
         </span>
       ),
     },
@@ -81,11 +74,8 @@ export default function SpotFuturesPage() {
       key: 'feeAdjPnl',
       header: 'Fee-Adj PnL',
       render: (item: SpotFuturesPair) => (
-        <span className={cn(
-          'font-mono tabular-nums',
-          item.feeAdjPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-        )}>
-          {item.feeAdjPnl >= 0 ? '+' : ''}{item.feeAdjPnl.toFixed(2)}%
+        <span className={cn('font-mono tabular-nums', item.feeAdjPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+          {formatPercent(item.feeAdjPnl)}
         </span>
       ),
     },
@@ -99,41 +89,18 @@ export default function SpotFuturesPage() {
   return (
     <DashboardLayout title="Spot-Futures Basis" subtitle="Live Dashboard">
       <div className="space-y-6">
-        {/* Stats Row */}
         <StatCardRow>
-          <StatCard
-            label="Active Opportunities"
-            value={spotFuturesStats.activeOpportunities}
-            variant="green"
-          />
-          <StatCard
-            label="Best Basis Now"
-            value={spotFuturesStats.bestBasis}
-            variant="cyan"
-          />
-          <StatCard
-            label="Pairs Monitored"
-            value={spotFuturesStats.pairsMonitored}
-            variant="purple"
-          />
-          <StatCard
-            label="Fee-Adj Threshold"
-            value={spotFuturesStats.feeAdjThreshold}
-            variant="yellow"
-          />
+          <StatCard label="Active Opportunities" value={spotFuturesStats.activeOpportunities} variant="green" />
+          <StatCard label="Best Basis Now" value={formatPercent(spotFuturesStats.bestBasis)} variant="cyan" />
+          <StatCard label="Pairs Monitored" value={spotFuturesStats.pairsMonitored} variant="purple" />
+          <StatCard label="Fee-Adj Threshold" value={formatPercent(spotFuturesStats.feeAdjThreshold)} variant="yellow" />
         </StatCardRow>
 
-        {/* Data Table */}
         <DataTable
           data={filteredData}
           columns={columns}
           title="Live Spot-Futures Pairs"
-          headerAction={
-            <ExchangeFilter
-              selected={selectedExchange}
-              onSelect={setSelectedExchange}
-            />
-          }
+          headerAction={<ExchangeFilter selected={selectedExchange} onSelect={setSelectedExchange} />}
         />
       </div>
     </DashboardLayout>

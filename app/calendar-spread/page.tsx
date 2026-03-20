@@ -1,16 +1,36 @@
 'use client'
 
+import { useState } from 'react'
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { StatCard, StatCardRow } from '@/components/dashboard/stat-card'
 import { DataTable } from '@/components/dashboard/data-table'
 import { SignalBadge } from '@/components/dashboard/signal-badge'
 import { TermStructureChart } from '@/components/dashboard/term-structure-chart'
-import { SpreadMatrix } from '@/components/dashboard/spread-matrix'
-import { calendarSpreadData, calendarStats } from '@/lib/mock-data'
+import { useMarketDataContext } from '@/lib/context/market-data-context'
+import { formatPercent } from '@/lib/formatters'
 import type { CalendarSpreadPair } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export default function CalendarSpreadPage() {
+  const { calendarSpreadData, calendarStats, termStructure } = useMarketDataContext()
+
+  // Build list of available assets for the chart selector
+  const availableAssets = [...new Set(calendarSpreadData.map((d) => d.asset))].sort()
+  const [selectedAsset, setSelectedAsset] = useState<string>('BTC')
+
+  const chartAsset = availableAssets.includes(selectedAsset) ? selectedAsset : (availableAssets[0] ?? 'BTC')
+
+  // Filter term structure points to the selected asset
+  // termStructure is already filtered to one asset in the hook — re-derive per asset from spread data
+  const assetTermPoints = calendarSpreadData
+    .filter((d) => d.asset === chartAsset && d.nearLeg === 'Spot')
+    .map((d) => ({ expiry: d.farLeg, price: d.farPrice, label: d.farLeg }))
+    // Add spot as the first point
+  const spotPrice = calendarSpreadData.find((d) => d.asset === chartAsset && d.nearLeg === 'Spot')?.nearPrice
+  const chartData = spotPrice
+    ? [{ expiry: 'Spot', price: spotPrice, label: 'Spot' }, ...assetTermPoints]
+    : assetTermPoints.length > 0 ? assetTermPoints : termStructure
+
   const columns = [
     {
       key: 'exchange',
@@ -28,24 +48,24 @@ export default function CalendarSpreadPage() {
     },
     {
       key: 'nearLeg',
-      header: 'Near Leg',
+      header: 'Buy (Near)',
       render: (item: CalendarSpreadPair) => (
         <span className="font-mono text-cyan-400">{item.nearLeg}</span>
       ),
     },
     {
       key: 'farLeg',
-      header: 'Far Leg',
+      header: 'Sell (Far)',
       render: (item: CalendarSpreadPair) => (
         <span className="font-mono text-cyan-400">{item.farLeg}</span>
       ),
     },
     {
       key: 'spreadPercent',
-      header: 'Spread %',
+      header: 'Spread',
       render: (item: CalendarSpreadPair) => (
-        <span className="font-mono tabular-nums font-medium text-emerald-400">
-          +{item.spreadPercent.toFixed(2)}%
+        <span className={cn('font-mono tabular-nums font-medium', item.spreadPercent >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+          {formatPercent(item.spreadPercent)}
         </span>
       ),
     },
@@ -54,19 +74,18 @@ export default function CalendarSpreadPage() {
       header: 'Ann. Return',
       mobileHidden: true,
       render: (item: CalendarSpreadPair) => (
-        <span className="font-mono tabular-nums text-emerald-400">{item.annReturn}</span>
+        <span className={cn('font-mono tabular-nums', item.annReturn >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+          {formatPercent(item.annReturn, 2)}/yr
+        </span>
       ),
     },
     {
       key: 'feeAdjPnl',
-      header: 'Fee-Adj PnL',
+      header: 'After Fees',
       mobileHidden: true,
       render: (item: CalendarSpreadPair) => (
-        <span className={cn(
-          'font-mono tabular-nums',
-          item.feeAdjPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-        )}>
-          {item.feeAdjPnl >= 0 ? '+' : ''}{item.feeAdjPnl.toFixed(2)}%
+        <span className={cn('font-mono tabular-nums', item.feeAdjPnl >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+          {formatPercent(item.feeAdjPnl)}
         </span>
       ),
     },
@@ -78,47 +97,27 @@ export default function CalendarSpreadPage() {
   ]
 
   return (
-    <DashboardLayout 
-      title="Calendar Spread" 
-      subtitle="Expiries: 28-Mar 26-Jun 26-Sep"
-    >
+    <DashboardLayout title="Calendar Spread" subtitle="Buy near-dated futures, sell far-dated futures to capture the spread">
       <div className="space-y-6">
-        {/* Stats Row */}
         <StatCardRow>
+          <StatCard label="Best Spread Now" value={formatPercent(calendarStats.bestSpread)} variant="green" />
+          <StatCard label="Opportunities" value={calendarStats.activeSpreads} variant="cyan" />
+          <StatCard label="Pairs Monitored" value={calendarStats.pairsMonitored} variant="purple" />
           <StatCard
-            label="Best Spread Now"
-            value={calendarStats.bestSpread}
-            variant="green"
-          />
-          <StatCard
-            label="Active Spreads"
-            value={calendarStats.activeSpreads}
-            variant="cyan"
-          />
-          <StatCard
-            label="Pairs Monitored"
-            value={calendarStats.pairsMonitored}
-            variant="purple"
-          />
-          <StatCard
-            label="Nearest Expiry (DTE)"
-            value={`${calendarStats.nearestDte} days ${calendarStats.nearestExpiry}`}
+            label="Next Expiry"
+            value={calendarStats.nearestDte ? `${calendarStats.nearestExpiry} (${calendarStats.nearestDte}d)` : '--'}
             variant="yellow"
           />
         </StatCardRow>
 
-        {/* Charts Row */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <TermStructureChart />
-          <SpreadMatrix />
-        </div>
-
-        {/* Data Table */}
-        <DataTable
-          data={calendarSpreadData}
-          columns={columns}
-          title="Live Spread Detail - All Pairs"
+        <TermStructureChart
+          data={chartData}
+          asset={chartAsset}
+          availableAssets={availableAssets}
+          onAssetChange={setSelectedAsset}
         />
+
+        <DataTable data={calendarSpreadData} columns={columns} title="All Calendar Spread Opportunities" />
       </div>
     </DashboardLayout>
   )
