@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { ExchangeStatusBar } from "./exchange-status-bar";
 import { useMarketDataContext } from "@/lib/context/market-data-context";
 import { formatTime } from "@/lib/formatters";
-import { Button } from "@/components/ui/button";
 import {
   Settings,
   Activity,
@@ -137,35 +136,18 @@ export function DashboardLayout({
             })}
           </nav>
           <div className="mt-auto border-t border-sidebar-border p-4">
-            <Button
+            <button
               onClick={() => navigate("/settings")}
-              variant={pathname === "/settings" ? "secondary" : "outline"}
               className={cn(
-                "group h-auto w-full cursor-pointer justify-between rounded-xl border-sidebar-border px-3 py-3 text-left shadow-none transition-all",
+                "flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                 pathname === "/settings"
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
-                  : "bg-sidebar/80 text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
               )}
             >
-              <span className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                    pathname === "/settings"
-                      ? "bg-sidebar-accent-foreground/10"
-                      : "bg-muted/60 group-hover:bg-muted"
-                  )}
-                >
-                  <Settings className="h-4 w-4" />
-                </span>
-                <span className="flex flex-col items-start leading-tight">
-                  <span className="text-sm font-semibold">Settings</span>
-                  <span className="text-xs text-muted-foreground">
-                    Preferences & alerts
-                  </span>
-                </span>
-              </span>
-            </Button>
+              <Settings className="h-4 w-4" />
+              Settings
+            </button>
           </div>
         </aside>
 
@@ -227,38 +209,21 @@ export function DashboardLayout({
             })}
           </nav>
           <div className="mt-auto border-t border-sidebar-border p-4">
-            <Button
+            <button
               onClick={() => {
                 navigate("/settings");
                 setDrawerOpen(false);
               }}
-              variant={pathname === "/settings" ? "secondary" : "outline"}
               className={cn(
-                "h-auto w-full justify-between rounded-xl border-sidebar-border px-3 py-3 text-left shadow-none transition-all cursor-pointer",
+                "flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                 pathname === "/settings"
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/90"
-                  : "bg-sidebar/80 text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
               )}
             >
-              <span className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                    pathname === "/settings"
-                      ? "bg-sidebar-accent-foreground/10"
-                      : "bg-muted/60"
-                  )}
-                >
-                  <Settings className="h-4 w-4" />
-                </span>
-                <span className="flex flex-col items-start leading-tight">
-                  <span className="text-sm font-semibold">Settings</span>
-                  <span className="text-xs text-muted-foreground">
-                    Preferences & alerts
-                  </span>
-                </span>
-              </span>
-            </Button>
+              <Settings className="h-4 w-4" />
+              Settings
+            </button>
           </div>
         </aside>
 
