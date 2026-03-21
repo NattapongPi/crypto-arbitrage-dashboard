@@ -47,12 +47,11 @@ app.prepare().then(() => {
   })
 
   server.listen(port, () => {
-    console.log(`> Ready on http://localhost:${port} (${dev ? 'dev' : 'production'})`)
+    process.stdout.write(`> Ready on http://localhost:${port} (${dev ? 'dev' : 'production'})\n`)
   })
 
   // Graceful shutdown
   function shutdown() {
-    console.log('\n> Shutting down...')
     hub.shutdown()
     server.close(() => {
       process.exit(0)
