@@ -11,7 +11,7 @@
  *   - Reconnection on tab visibility change
  */
 
-import { useEffect, useRef, useCallback, useState, startTransition } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { createAdapter } from "../exchanges";
 import { onProxyLatency } from "../exchanges/proxy-adapter";
 import { fetchInstruments } from "../instruments";
@@ -228,7 +228,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
 
     // Spot-futures stats
     const opportunities = spotFuturesData.filter(
-      (d) => d.signal === "BUY BASIS"
+      (d) => d.signal === "BUY BASIS" || d.signal === "LONG SPOT"
     );
     const bestBasis = spotFuturesData.reduce(
       (max, d) => Math.max(max, d.basisPercent),
@@ -485,7 +485,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
     if (calcTimer.current) return;
     calcTimer.current = setTimeout(() => {
       calcTimer.current = null;
-      startTransition(() => recalculate());
+      recalculate();
     }, CALC_THROTTLE_MS);
   }, [recalculate]);
 

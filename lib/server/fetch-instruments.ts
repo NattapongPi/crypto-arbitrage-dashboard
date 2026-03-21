@@ -282,21 +282,46 @@ function parseDeribitExpiry(name: string): string | null {
   return `${year}-${month}-${day}`
 }
 
+// ─── In-memory cache ──────────────────────────────────────────────────────────
+
+const CACHE_TTL_MS = 3_600_000 // 1 hour
+let cachedInstruments: InstrumentInfo[] | null = null
+let cacheExpiresAt = 0
+let fetchInProgress: Promise<InstrumentInfo[]> | null = null
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function fetchAllInstruments(): Promise<InstrumentInfo[]> {
-  const [binance, bybit, okx, deribit] = await Promise.allSettled([
-    fetchBinanceInstruments(),
-    fetchBybitInstruments(),
-    fetchOKXInstruments(),
-    fetchDeribitInstruments(),
-  ])
+  const now = Date.now()
 
+  // Return cached result if still valid
+  if (cachedInstruments && now < cacheExpiresAt) {
+    return cachedInstruments
+  }
 
-  return [
-    ...(binance.status === 'fulfilled' ? binance.value : []),
-    ...(bybit.status === 'fulfilled' ? bybit.value : []),
-    ...(okx.status === 'fulfilled' ? okx.value : []),
-    ...(deribit.status === 'fulfilled' ? deribit.value : []),
-  ]
+  // Deduplicate concurrent fetches
+  if (fetchInProgress) return fetchInProgress
+
+  fetchInProgress = (async () => {
+    const [binance, bybit, okx, deribit] = await Promise.allSettled([
+      fetchBinanceInstruments(),
+      fetchBybitInstruments(),
+      fetchOKXInstruments(),
+      fetchDeribitInstruments(),
+    ])
+
+    const result = [
+      ...(binance.status === 'fulfilled' ? binance.value : []),
+      ...(bybit.status === 'fulfilled' ? bybit.value : []),
+      ...(okx.status === 'fulfilled' ? okx.value : []),
+      ...(deribit.status === 'fulfilled' ? deribit.value : []),
+    ]
+
+    cachedInstruments = result
+    cacheExpiresAt = Date.now() + CACHE_TTL_MS
+    fetchInProgress = null
+    return result
+  })()
+
+  return fetchInProgress
 }

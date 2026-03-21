@@ -146,7 +146,7 @@ export function mergeAlerts(
   // Remove alerts where the opportunity is gone (signal is SKIP or WATCH and alert is old)
   const activeKeys = new Set([
     ...spotFutures
-      .filter((s) => s.signal === "BUY BASIS")
+      .filter((s) => s.signal === "BUY BASIS" || s.signal === "LONG SPOT")
       .map((s) => alertKey(s.exchange, s.pair, "Spot-Fut")),
     ...funding
       .filter((f) => f.signal === "LONG SPOT" || f.signal === "SHORT OPP")
@@ -160,11 +160,13 @@ export function mergeAlerts(
 
   const allAlerts = [...existingByKey.values()]
     .map((alert) => {
-      // If the opportunity is gone, accelerate to FADING
-      if (
-        !activeKeys.has(alertKey(alert.exchange, alert.pair, alert.strategy))
-      ) {
-        return { ...alert, status: "FADING" as AlertStatus };
+      // If the opportunity is gone, accelerate to FADING only after 30s grace period
+      // This prevents flickering when prices oscillate around the threshold
+      if (!activeKeys.has(alertKey(alert.exchange, alert.pair, alert.strategy))) {
+        const ageSeconds = (Date.now() - alert.createdAt) / 1000
+        if (ageSeconds >= 30) {
+          return { ...alert, status: "FADING" as AlertStatus };
+        }
       }
       return alert;
     })
