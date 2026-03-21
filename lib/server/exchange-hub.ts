@@ -35,6 +35,7 @@ export class ExchangeHub {
   private instruments: InstrumentInfo[] = []
   private instrumentsFetched = false
   private instrumentsFetching: Promise<void> | null = null
+  private exchangeStatus = new Map<Exchange, { status: ExchangeStatus; latency?: number }>()
 
   // How long to wait before closing an exchange connection after last client
   // unsubscribes. Prevents churn during React StrictMode double-mount or
@@ -94,7 +95,7 @@ export class ExchangeHub {
     // Ensure instruments are loaded before connecting
     await this.ensureInstruments()
 
-    this.incrementRef(exchange)
+    this.incrementRef(exchange, session)
   }
 
   private unsubscribe(session: ClientSession, exchange: Exchange) {
@@ -105,7 +106,7 @@ export class ExchangeHub {
 
   // ─── Ref counting ─────────────────────────────────────────────────────────
 
-  private incrementRef(exchange: Exchange) {
+  private incrementRef(exchange: Exchange, session: ClientSession) {
     // Cancel any pending disconnect for this exchange
     const timer = this.disconnectTimers.get(exchange)
     if (timer) {
@@ -119,6 +120,12 @@ export class ExchangeHub {
     if (count === 1) {
       // First subscriber — open connection
       this.connectExchange(exchange)
+    } else {
+      // Exchange already running — send current status immediately to this client
+      const current = this.exchangeStatus.get(exchange)
+      if (current) {
+        this.sendToClient(session.ws, { type: 'status', data: { exchange, ...current } })
+      }
     }
   }
 
@@ -156,6 +163,7 @@ export class ExchangeHub {
         this.broadcast(exchange, msg)
       },
       onStatusChange: (ex, status, latency) => {
+        this.exchangeStatus.set(ex, { status, latency })
         const msg = JSON.stringify({ type: 'status', data: { exchange: ex, status, latency } } satisfies ServerMsg)
         this.broadcast(ex, msg)
       },

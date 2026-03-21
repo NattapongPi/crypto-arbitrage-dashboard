@@ -137,9 +137,9 @@ export function createBybitAdapter(): ExchangeAdapter {
         timestamp: data.ts ?? Date.now(),
       })
 
-      const fundingRate = parseFloat(tickerData.fundingRate ?? '0')
+      const fundingRate = parseFloat(tickerData.fundingRate ?? 'NaN')
       const nextFundingTime = parseInt(tickerData.nextFundingTime ?? '0')
-      if (fundingRate && nextFundingTime) {
+      if (!isNaN(fundingRate) && nextFundingTime) {
         const funding: NormalizedFundingRate = {
           exchange: 'Bybit',
           baseAsset: perpBase,
