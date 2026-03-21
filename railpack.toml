@@ -1,0 +1,14 @@
+[build]
+cmd = "npm run build"
+
+[deploy]
+cmd = "npm start"
+startCmd = "node dist/server.js"
+
+[[build.cache]]
+id = "next-cache"
+directory = ".next/cache"
+
+[[build.cache]]
+id = "node-modules-cache"
+directory = "node_modules/.cache"
