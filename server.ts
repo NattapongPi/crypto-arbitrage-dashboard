@@ -17,7 +17,8 @@ import { ExchangeHub } from './lib/server/exchange-hub'
 
 const dev = process.env.NODE_ENV !== 'production'
 const port = parseInt(process.env.PORT ?? '3000', 10)
-const hostname = 'localhost'
+// Bind to 0.0.0.0 so Railway's proxy can reach the server
+const hostname = '0.0.0.0'
 
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
@@ -41,6 +42,13 @@ app.prepare().then(() => {
     }
     // All other upgrade requests (e.g. Next.js HMR) fall through untouched
   })
+
+  // Send WebSocket-level pings every 30s to keep Railway's proxy from closing idle connections
+  setInterval(() => {
+    for (const ws of wss.clients) {
+      if (ws.readyState === ws.OPEN) ws.ping()
+    }
+  }, 30_000)
 
   wss.on('connection', (ws) => {
     hub.addClient(ws)
