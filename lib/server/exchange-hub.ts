@@ -120,12 +120,12 @@ export class ExchangeHub {
     if (count === 1) {
       // First subscriber — open connection
       this.connectExchange(exchange)
-    } else {
-      // Exchange already running — send current status immediately to this client
-      const current = this.exchangeStatus.get(exchange)
-      if (current) {
-        this.sendToClient(session.ws, { type: 'status', data: { exchange, ...current } })
-      }
+    }
+
+    // Always send current status immediately if we have it
+    const current = this.exchangeStatus.get(exchange)
+    if (current) {
+      this.sendToClient(session.ws, { type: 'status', data: { exchange, ...current } })
     }
   }
 
