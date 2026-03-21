@@ -85,6 +85,12 @@ export class ExchangeHub {
       this.unsubscribe(session, msg.exchange as Exchange)
     } else if (msg.type === 'ping' && typeof msg.ts === 'number') {
       this.sendToClient(session.ws, { type: 'pong', ts: msg.ts })
+    } else if (msg.type === 'sync') {
+      // Client is requesting current status — send all known statuses since subscribedExchanges
+      // may not be populated yet (subscribe is async, sync may arrive before it completes)
+      for (const [exchange, current] of this.exchangeStatus) {
+        this.sendToClient(session.ws, { type: 'status', data: { exchange, ...current } })
+      }
     }
   }
 

@@ -4,7 +4,7 @@
  * The update function is called explicitly (Save button), not on every input change.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { z } from 'zod'
 import type { UserSettings } from '../types'
 import { DEFAULT_SETTINGS } from '../constants'
@@ -61,7 +61,14 @@ export interface UseSettingsReturn {
 }
 
 export function useSettings(): UseSettingsReturn {
-  const [settings, setSettings] = useState<UserSettings>(loadSettings)
+  // Always start with DEFAULT_SETTINGS so server and client render the same HTML.
+  // Load from localStorage after mount to avoid hydration mismatch.
+  const [settings, setSettings] = useState<UserSettings>({ ...DEFAULT_SETTINGS })
+
+  useEffect(() => {
+    const saved = loadSettings()
+    setSettings(saved)
+  }, [])
 
   const applySettings = useCallback((next: UserSettings) => {
     saveSettings(next)

@@ -11,8 +11,9 @@
  *   - Reconnection on tab visibility change
  */
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, startTransition } from "react";
 import { createAdapter } from "../exchanges";
+import { onProxyLatency } from "../exchanges/proxy-adapter";
 import { fetchInstruments } from "../instruments";
 import {
   calcBasisPercent,
@@ -67,6 +68,7 @@ export interface MarketDataState {
   // Connection state
   isConnecting: boolean;
   exchangeHealth: ExchangeHealth[];
+  proxyLatency: number | undefined;
   lastTickTime: number;
 
   // Derived UI data
@@ -92,6 +94,7 @@ const EMPTY_STATE: MarketDataState = {
     { exchange: "OKX", status: "CONNECTING" },
     { exchange: "Deribit", status: "CONNECTING" },
   ],
+  proxyLatency: undefined,
   lastTickTime: 0,
   spotFuturesData: [],
   fundingRateData: [],
@@ -138,6 +141,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
   const priceBuffers = useRef(new Map<string, PriceSnapshot[]>());
   const alerts = useRef<LiveAlert[]>([]);
   const exchangeHealth = useRef<ExchangeHealth[]>(EMPTY_STATE.exchangeHealth);
+  const proxyLatencyRef = useRef<number | undefined>(undefined);
   const adapters = useRef(new Map<string, ExchangeAdapter>());
   const instruments = useRef<InstrumentInfo[]>([]);
   const calcTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -461,6 +465,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
         (e) => e.status === "CONNECTING"
       ),
       exchangeHealth: [...exchangeHealth.current],
+      proxyLatency: proxyLatencyRef.current,
       lastTickTime: lastTickTimeRef.current,
       spotFuturesData,
       fundingRateData,
@@ -480,7 +485,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
     if (calcTimer.current) return;
     calcTimer.current = setTimeout(() => {
       calcTimer.current = null;
-      recalculate();
+      startTransition(() => recalculate());
     }, CALC_THROTTLE_MS);
   }, [recalculate]);
 
@@ -585,6 +590,15 @@ export function useMarketData(settings: UserSettings): MarketDataState {
     return () => {
       if (alertTimer.current) clearInterval(alertTimer.current);
     };
+  }, []);
+
+  // ── Proxy latency updates ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    return onProxyLatency((ms) => {
+      proxyLatencyRef.current = ms;
+      setState((prev) => ({ ...prev, proxyLatency: ms }));
+    });
   }, []);
 
   // ── Reconnect on tab focus ────────────────────────────────────────────────────

@@ -27,7 +27,7 @@ const tooltipDetails: Record<ExchangeStatus, string> = {
 }
 
 export function ExchangeStatusBar() {
-  const { exchangeHealth } = useMarketDataContext()
+  const { exchangeHealth, proxyLatency } = useMarketDataContext()
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -49,7 +49,6 @@ export function ExchangeStatusBar() {
                   {/* Status dot */}
                   <span className="relative flex h-2 w-2 shrink-0">
                     {isConnecting ? (
-                      // Spinning ring for CONNECTING
                       <span className="absolute inline-flex h-full w-full rounded-full border border-current opacity-60 animate-spin border-t-transparent" />
                     ) : (
                       <>
@@ -79,22 +78,31 @@ export function ExchangeStatusBar() {
                   {/* Status label */}
                   <span className="uppercase opacity-80">{config.label}</span>
 
-                  {/* Latency (only when LIVE or SLOW) */}
-                  {ex.latency != null && (ex.status === 'LIVE' || ex.status === 'SLOW') && (
-                    <span className="opacity-60">{ex.latency}ms</span>
-                  )}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
                 <p className="font-semibold mb-0.5">{ex.exchange}</p>
                 <p>{tooltipDetails[ex.status]}</p>
-                {ex.latency != null && (
-                  <p className="opacity-70 mt-0.5">Latency: {ex.latency}ms</p>
-                )}
               </TooltipContent>
             </Tooltip>
           )
         })}
+
+        {/* Shared server (proxy) latency pill */}
+        {proxyLatency != null && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium cursor-default select-none bg-muted/30 text-muted-foreground">
+                <span className="opacity-60">ws</span>
+                <span>{proxyLatency}ms</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              <p className="font-semibold mb-0.5">Server latency</p>
+              <p>Round-trip time between your browser and the proxy server.</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </TooltipProvider>
   )

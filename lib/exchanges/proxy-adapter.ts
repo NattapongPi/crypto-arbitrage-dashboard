@@ -21,12 +21,35 @@ let shouldReconnect = true
 let pingTimer: ReturnType<typeof setInterval> | null = null
 let pingSentAt = 0
 let latency: number | undefined = undefined
+let visibilityListenerAdded = false
 
 // Registry of active adapters (exchange → callbacks)
 const registry = new Map<Exchange, AdapterCallbacks>()
 
+// Listeners notified when proxy latency updates
+const latencyListeners = new Set<(ms: number) => void>()
+
 // Pending subscriptions to send once the socket opens
 const pendingSubscriptions = new Set<Exchange>()
+
+// Reconnect immediately when tab becomes visible again
+function ensureVisibilityListener() {
+  if (visibilityListenerAdded || typeof document === 'undefined') return
+  visibilityListenerAdded = true
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !shouldReconnect) return
+
+    if (!sharedWs || sharedWs.readyState === WebSocket.CLOSED || sharedWs.readyState === WebSocket.CLOSING) {
+      // Socket is dead — reconnect immediately (reset backoff)
+      reconnectDelay = RECONNECT_BASE_DELAY_MS
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+      openSharedSocket()
+    } else if (sharedWs.readyState === WebSocket.OPEN) {
+      // Socket is still open — ask server to resend all current statuses
+      sharedWs.send(JSON.stringify({ type: 'sync' }))
+    }
+  })
+}
 
 function getWsUrl(): string {
   // Allow overriding the WS endpoint via env var (needed for Railway TCP proxy)
@@ -56,6 +79,13 @@ function openSharedSocket() {
       sharedWs!.send(JSON.stringify({ type: 'subscribe', exchange }))
     }
     pendingSubscriptions.clear()
+
+    // Ask server to immediately resend current status for all subscribed exchanges
+    sharedWs!.send(JSON.stringify({ type: 'sync' }))
+
+    // Send an immediate ping to get latency right away
+    pingSentAt = Date.now()
+    sharedWs!.send(JSON.stringify({ type: 'ping', ts: pingSentAt }))
 
     // Start ping/pong for latency tracking
     pingTimer = setInterval(() => {
@@ -111,6 +141,7 @@ function closeSharedSocket() {
 function dispatchMessage(msg: Record<string, unknown>) {
   if (msg.type === 'pong' && typeof msg.ts === 'number') {
     latency = Date.now() - msg.ts
+    for (const fn of latencyListeners) fn(latency)
     return
   }
 
@@ -145,6 +176,7 @@ export function createProxyAdapter(exchange: Exchange): ExchangeAdapter {
     connect(_instruments: InstrumentInfo[], callbacks: AdapterCallbacks) {
       registry.set(exchange, callbacks)
       callbacks.onStatusChange(exchange, 'CONNECTING')
+      ensureVisibilityListener()
 
       if (!sharedWs || sharedWs.readyState === WebSocket.CLOSED || sharedWs.readyState === WebSocket.CLOSING) {
         openSharedSocket()
@@ -176,4 +208,10 @@ export function createProxyAdapter(exchange: Exchange): ExchangeAdapter {
 /** Expose latency for any adapter to report (shared connection, single latency). */
 export function getProxyLatency(): number | undefined {
   return latency
+}
+
+/** Subscribe to proxy latency updates (called on each pong). Returns unsubscribe fn. */
+export function onProxyLatency(fn: (ms: number) => void): () => void {
+  latencyListeners.add(fn)
+  return () => latencyListeners.delete(fn)
 }
