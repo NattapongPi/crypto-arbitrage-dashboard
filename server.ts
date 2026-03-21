@@ -54,8 +54,8 @@ app.prepare().then(() => {
     hub.addClient(ws)
   })
 
-  server.listen(port, () => {
-    process.stdout.write(`> Ready on http://localhost:${port} (${dev ? 'dev' : 'production'})\n`)
+  server.listen(port, hostname, () => {
+    process.stdout.write(`> Ready on http://${hostname}:${port} (${dev ? 'dev' : 'production'})\n`)
   })
 
   // Graceful shutdown
