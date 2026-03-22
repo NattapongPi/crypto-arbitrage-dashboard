@@ -6,13 +6,15 @@
 import type { InstrumentInfo, FuturesContract } from '../types'
 import { MAX_PAIRS_PER_EXCHANGE } from '../constants'
 
+const FETCH_TIMEOUT_MS = 10_000
+
 // ─── Binance ──────────────────────────────────────────────────────────────────
 
 async function fetchBinanceInstruments(): Promise<InstrumentInfo[]> {
   const [spotInfo, futuresInfo, futuresTickers] = await Promise.all([
-    fetch('https://api.binance.com/api/v3/exchangeInfo?permissions=SPOT', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
-    fetch('https://fapi.binance.com/fapi/v1/exchangeInfo', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
-    fetch('https://fapi.binance.com/fapi/v1/ticker/24hr', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
+    fetch('https://api.binance.com/api/v3/exchangeInfo?permissions=SPOT', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
+    fetch('https://fapi.binance.com/fapi/v1/exchangeInfo', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
+    fetch('https://fapi.binance.com/fapi/v1/ticker/24hr', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
   ])
 
   const volumeMap = new Map<string, number>()
@@ -76,9 +78,9 @@ async function fetchBinanceInstruments(): Promise<InstrumentInfo[]> {
 
 async function fetchBybitInstruments(): Promise<InstrumentInfo[]> {
   const [spotRes, linearRes, tickersRes] = await Promise.all([
-    fetch('https://api.bybit.com/v5/market/instruments-info?category=spot&limit=1000', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
-    fetch('https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
-    fetch('https://api.bybit.com/v5/market/tickers?category=linear', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
+    fetch('https://api.bybit.com/v5/market/instruments-info?category=spot&limit=1000', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
+    fetch('https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
+    fetch('https://api.bybit.com/v5/market/tickers?category=linear', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
   ])
 
   const volumeMap = new Map<string, number>()
@@ -132,10 +134,10 @@ async function fetchBybitInstruments(): Promise<InstrumentInfo[]> {
 
 async function fetchOKXInstruments(): Promise<InstrumentInfo[]> {
   const [spotRes, swapRes, futuresRes, tickersRes] = await Promise.all([
-    fetch('https://www.okx.com/api/v5/public/instruments?instType=SPOT', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
-    fetch('https://www.okx.com/api/v5/public/instruments?instType=SWAP', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
-    fetch('https://www.okx.com/api/v5/public/instruments?instType=FUTURES', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
-    fetch('https://www.okx.com/api/v5/market/tickers?instType=SWAP', { cache: 'no-store' }).then((r) => r.json() as Promise<any>),
+    fetch('https://www.okx.com/api/v5/public/instruments?instType=SPOT', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
+    fetch('https://www.okx.com/api/v5/public/instruments?instType=SWAP', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
+    fetch('https://www.okx.com/api/v5/public/instruments?instType=FUTURES', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
+    fetch('https://www.okx.com/api/v5/market/tickers?instType=SWAP', { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }).then((r) => r.json() as Promise<any>),
   ])
 
   const volumeMap = new Map<string, number>()
@@ -201,7 +203,7 @@ async function fetchDeribitInstruments(): Promise<InstrumentInfo[]> {
     currencies.map(async (currency) => {
       const res = await fetch(
         `https://www.deribit.com/api/v2/public/get_instruments?currency=${currency}&kind=future&expired=false`,
-        { cache: 'no-store' }
+        { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
       ).then((r) => r.json() as Promise<any>)
 
       const instruments: InstrumentInfo = {
@@ -232,7 +234,7 @@ async function fetchDeribitInstruments(): Promise<InstrumentInfo[]> {
         try {
           const ticker = await fetch(
             `https://www.deribit.com/api/v2/public/ticker?instrument_name=${instruments.perpSymbol}`,
-            { cache: 'no-store' }
+            { cache: 'no-store', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
           ).then((r) => r.json() as Promise<any>)
           instruments.volume24hUsd = ticker.result?.stats?.volume_usd ?? 0
         } catch {
@@ -310,6 +312,12 @@ export async function fetchAllInstruments(): Promise<InstrumentInfo[]> {
       fetchDeribitInstruments(),
     ])
 
+    for (const [name, settled] of [['Binance', binance], ['Bybit', bybit], ['OKX', okx], ['Deribit', deribit]] as const) {
+      if (settled.status === 'rejected') {
+        console.warn(`[instruments] ${name} fetch failed:`, (settled.reason as Error)?.message ?? settled.reason)
+      }
+    }
+
     const result = [
       ...(binance.status === 'fulfilled' ? binance.value : []),
       ...(bybit.status === 'fulfilled' ? bybit.value : []),
@@ -317,10 +325,15 @@ export async function fetchAllInstruments(): Promise<InstrumentInfo[]> {
       ...(deribit.status === 'fulfilled' ? deribit.value : []),
     ]
 
-    cachedInstruments = result
-    cacheExpiresAt = Date.now() + CACHE_TTL_MS
+    // Only update cache if we got data; otherwise preserve stale cache so a
+    // total failure doesn't wipe out an hour of valid instrument data.
+    if (result.length > 0) {
+      cachedInstruments = result
+      cacheExpiresAt = Date.now() + CACHE_TTL_MS
+    }
+
     fetchInProgress = null
-    return result
+    return result.length > 0 ? result : (cachedInstruments ?? [])
   })()
 
   return fetchInProgress
