@@ -184,7 +184,11 @@ function dispatchMessage(msg: ServerMessage) {
 
   if (msg.type === "ticker") {
     const callbacks = registry.get(msg.data.exchange);
-    if (callbacks) callbacks.onTicker(msg.data);
+    if (callbacks) {
+      callbacks.onTicker(msg.data);
+    } else {
+      console.warn(`[Proxy] No callbacks registered for ${msg.data.exchange}`);
+    }
   } else if (msg.type === "funding") {
     const callbacks = registry.get(msg.data.exchange);
     if (callbacks) callbacks.onFunding(msg.data);

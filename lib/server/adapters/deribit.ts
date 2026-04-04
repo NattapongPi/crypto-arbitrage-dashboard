@@ -122,20 +122,15 @@ export function createDeribitAdapter(): ExchangeAdapter {
           baseAsset: perpBase,
           type: "perp",
           lastPrice: price,
+          bidPrice: tickerData.best_bid_price,
+          askPrice: tickerData.best_ask_price,
           timestamp: ts,
         });
       }
 
-      const indexPrice = tickerData.index_price;
-      if (indexPrice) {
-        callbacks.onTicker({
-          exchange: "Deribit",
-          baseAsset: perpBase,
-          type: "spot",
-          lastPrice: indexPrice,
-          timestamp: ts,
-        });
-      }
+      // Deribit is a derivatives-only exchange - no real spot market
+      // Index price is synthetic and doesn't have bid/ask spreads
+      // Spot-futures basis requires real order book data, so we skip spot emission
 
       const funding8h = tickerData.funding_8h;
       const currentFunding = tickerData.current_funding;
@@ -161,6 +156,8 @@ export function createDeribitAdapter(): ExchangeAdapter {
         expiry: futInfo.expiry,
         expiryLabel: futInfo.expiryLabel,
         lastPrice: price,
+        bidPrice: tickerData.best_bid_price,
+        askPrice: tickerData.best_ask_price,
         timestamp: ts,
       });
     }
@@ -217,6 +214,8 @@ function isDeribitMsg(data: unknown): data is DeribitMsg {
 
 interface DeribitTicker {
   last_price?: number;
+  best_bid_price?: number; // Best bid price
+  best_ask_price?: number; // Best ask price
   index_price?: number;
   funding_8h?: number;
   current_funding?: number;

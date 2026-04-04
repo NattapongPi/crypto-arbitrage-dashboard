@@ -23,11 +23,23 @@ type BinanceSpotMessage = {
   c: string;
 };
 
+type BinanceBookTickerMsg = {
+  e: "bookTicker";
+  u: number; // order book updateId
+  s: string; // symbol
+  b: string; // best bid price
+  B: string; // best bid qty
+  a: string; // best ask price
+  A: string; // best ask qty
+};
+
 type BinanceFuturesTickerMsg = {
   e: "24hrTicker";
   E: number;
   s: string;
   c: string;
+  b: string; // Best bid price
+  a: string; // Best ask price
 };
 
 type BinanceMarkPriceMsg = {
@@ -51,6 +63,21 @@ function isBinanceSpotMsg(data: unknown): data is BinanceSpotMessage {
   );
 }
 
+function isBinanceBookTickerMsg(data: unknown): data is BinanceBookTickerMsg {
+  if (typeof data !== "object" || data === null) return false;
+  const msg = data as Record<string, unknown>;
+  // bookTicker messages may or may not have the 'e' field when subscribed via combined streams
+  // Check for the presence of bookTicker-specific fields: u (updateId), b (bid), a (ask)
+  const hasBookTickerFields =
+    typeof msg.u === "number" &&
+    typeof msg.s === "string" &&
+    typeof msg.b === "string" &&
+    typeof msg.a === "string";
+
+  // Either has e="bookTicker" OR has the bookTicker field structure
+  return msg.e === "bookTicker" || hasBookTickerFields;
+}
+
 function isBinanceFuturesMsg(data: unknown): data is BinanceFuturesMessage {
   if (typeof data !== "object" || data === null) return false;
   const msg = data as Record<string, unknown>;
@@ -65,8 +92,17 @@ function isBinanceFuturesMsg(data: unknown): data is BinanceFuturesMessage {
 
 export function createBinanceAdapter(): ExchangeAdapter {
   let spotManager: ReturnType<typeof createWsManager> | null = null;
-  let futuresManager: ReturnType<typeof createWsManager> | null = null;
+  const futuresManagers: ReturnType<typeof createWsManager>[] = [];
   let callbacks: AdapterCallbacks | null = null;
+
+  // Local cache for spot bid/ask prices from bookTicker stream
+  const spotBidAskCache = new Map<string, { bid: number; ask: number }>();
+  // Store latest spot prices to re-emit once bookTicker arrives
+  const pendingSpotTickers = new Map<string, BinanceSpotMessage>();
+  // Local cache for perp bid/ask prices from bookTicker stream
+  const perpBidAskCache = new Map<string, { bid: number; ask: number }>();
+  // Store latest perp prices to re-emit once bookTicker arrives
+  const pendingPerpTickers = new Map<string, BinanceFuturesTickerMsg>();
 
   function connect(instruments: InstrumentInfo[], cb: AdapterCallbacks) {
     callbacks = cb;
@@ -79,15 +115,29 @@ export function createBinanceAdapter(): ExchangeAdapter {
 
     const spotStreams = binanceInstruments
       .filter((i) => i.spotSymbol)
-      .map((i) => `${i.spotSymbol!.toLowerCase()}@ticker`)
-      .slice(0, MAX_STREAMS_PER_CONNECTION);
+      .map((i) => `${i.spotSymbol!.toLowerCase()}@ticker`);
+
+    // Add bookTicker streams for bid/ask prices - limit to avoid exceeding stream limits
+    const spotBookTickerStreams = binanceInstruments
+      .filter((i) => i.spotSymbol)
+      .map((i) => `${i.spotSymbol!.toLowerCase()}@bookTicker`);
+
+    // Combine and limit total streams to stay within Binance's 1024 limit per connection
+    const allSpotStreams = [...spotStreams, ...spotBookTickerStreams].slice(
+      0,
+      MAX_STREAMS_PER_CONNECTION,
+    );
 
     spotManager = createWsManager({
       url: SPOT_WS_URL,
       onOpen: (send) => {
-        if (spotStreams.length > 0) {
+        if (allSpotStreams.length > 0) {
           send(
-            JSON.stringify({ method: "SUBSCRIBE", params: spotStreams, id: 1 }),
+            JSON.stringify({
+              method: "SUBSCRIBE",
+              params: allSpotStreams,
+              id: 1,
+            }),
           );
         }
         callbacks?.onStatusChange("Binance", "LIVE", spotManager?.getLatency());
@@ -95,29 +145,49 @@ export function createBinanceAdapter(): ExchangeAdapter {
       onMessage: (data) => {
         if (isBinanceSpotMsg(data)) {
           handleSpotMessage(data);
+        } else if (isBinanceBookTickerMsg(data)) {
+          handleBookTickerMessage(data);
         }
       },
-      onClose: () => callbacks?.onStatusChange("Binance", "CONNECTING"),
-      onError: () => callbacks?.onStatusChange("Binance", "OFFLINE"),
+      onClose: () => {
+        callbacks?.onStatusChange("Binance", "CONNECTING");
+      },
+      onError: (err) => {
+        console.error("[Binance] Spot WebSocket error:", err);
+        callbacks?.onStatusChange("Binance", "OFFLINE");
+      },
     });
 
     const perpStreams: string[] = [];
+    const perpBookTickerStreams: string[] = [];
     const futuresStreams: string[] = [];
 
     for (const inst of binanceInstruments) {
       if (inst.perpSymbol) {
         perpStreams.push(`${inst.perpSymbol.toLowerCase()}@ticker`);
         perpStreams.push(`${inst.perpSymbol.toLowerCase()}@markPrice`);
+        perpBookTickerStreams.push(
+          `${inst.perpSymbol.toLowerCase()}@bookTicker`,
+        );
       }
       for (const contract of inst.futuresContracts) {
         futuresStreams.push(`${contract.symbol.toLowerCase()}@ticker`);
       }
     }
 
-    const allFuturesStreams = [...perpStreams, ...futuresStreams].slice(
-      0,
-      MAX_STREAMS_PER_CONNECTION,
-    );
+    const allFuturesStreams = [
+      ...perpStreams,
+      ...perpBookTickerStreams,
+      ...futuresStreams,
+    ];
+
+    // Split streams into multiple connections to avoid Binance's practical limit
+    // (theoretical limit is 1024, but connections fail with 600+ streams)
+    const STREAMS_PER_CONNECTION = 250;
+    const streamChunks: string[][] = [];
+    for (let i = 0; i < allFuturesStreams.length; i += STREAMS_PER_CONNECTION) {
+      streamChunks.push(allFuturesStreams.slice(i, i + STREAMS_PER_CONNECTION));
+    }
 
     const futuresExpiry = new Map<
       string,
@@ -139,38 +209,59 @@ export function createBinanceAdapter(): ExchangeAdapter {
         perpToBase.set(inst.perpSymbol.toUpperCase(), inst.baseAsset);
     }
 
-    futuresManager = createWsManager({
-      url: FUTURES_WS_URL,
-      onOpen: (send) => {
-        if (allFuturesStreams.length > 0) {
-          send(
-            JSON.stringify({
-              method: "SUBSCRIBE",
-              params: allFuturesStreams,
-              id: 2,
-            }),
+    // Create multiple WebSocket connections for futures
+    for (let i = 0; i < streamChunks.length; i++) {
+      const chunk = streamChunks[i];
+      const manager = createWsManager({
+        url: FUTURES_WS_URL,
+        onOpen: (send) => {
+          if (chunk.length > 0) {
+            send(
+              JSON.stringify({
+                method: "SUBSCRIBE",
+                params: chunk,
+                id: 2 + i,
+              }),
+            );
+          }
+        },
+        onMessage: (data) => {
+          if (isBinanceFuturesMsg(data)) {
+            handleFuturesMessage(data, perpToBase, futuresExpiry);
+          } else if (isBinanceBookTickerMsg(data)) {
+            // Handle perp bookTicker messages
+            const symbol = (data as Record<string, unknown>).s as string;
+            if (symbol && perpToBase.has(symbol.toUpperCase())) {
+              handlePerpBookTickerMessage(data as BinanceBookTickerMsg);
+            }
+          }
+        },
+        onClose: () => {},
+        onError: (err) => {
+          console.error(
+            `[Binance] Futures WS #${i + 1} error:`,
+            err.message || err,
           );
-        }
-      },
-      onMessage: (data) => {
-        if (isBinanceFuturesMsg(data)) {
-          handleFuturesMessage(data, perpToBase, futuresExpiry);
-        }
-      },
-      onClose: () => {},
-      onError: () => callbacks?.onStatusChange("Binance", "OFFLINE"),
-    });
+          callbacks?.onStatusChange("Binance", "OFFLINE");
+        },
+      });
+      futuresManagers.push(manager);
+    }
 
     spotManager.connect();
-    futuresManager.connect();
+    futuresManagers.forEach((m) => m.connect());
   }
 
   function disconnect() {
     spotManager?.disconnect();
-    futuresManager?.disconnect();
+    futuresManagers.forEach((m) => m.disconnect());
     spotManager = null;
-    futuresManager = null;
+    futuresManagers.length = 0;
     callbacks = null;
+    spotBidAskCache.clear();
+    pendingSpotTickers.clear();
+    perpBidAskCache.clear();
+    pendingPerpTickers.clear();
   }
 
   function handleSpotMessage(data: BinanceSpotMessage) {
@@ -180,13 +271,104 @@ export function createBinanceAdapter(): ExchangeAdapter {
     if (!symbol || !symbol.endsWith("USDT")) return;
     const baseAsset = symbol.slice(0, -4);
 
-    callbacks.onTicker({
-      exchange: "Binance",
-      baseAsset,
-      type: "spot",
-      lastPrice: parseFloat(data.c),
-      timestamp: data.E ?? Date.now(),
-    });
+    // Get cached bid/ask from bookTicker stream
+    const cached = spotBidAskCache.get(baseAsset);
+
+    if (cached) {
+      // BookTicker already arrived, emit with bid/ask
+      callbacks.onTicker({
+        exchange: "Binance",
+        baseAsset,
+        type: "spot",
+        lastPrice: parseFloat(data.c),
+        bidPrice: cached.bid,
+        askPrice: cached.ask,
+        timestamp: data.E ?? Date.now(),
+      });
+    } else {
+      // BookTicker not arrived yet, store and emit without bid/ask
+      pendingSpotTickers.set(baseAsset, data);
+      callbacks.onTicker({
+        exchange: "Binance",
+        baseAsset,
+        type: "spot",
+        lastPrice: parseFloat(data.c),
+        bidPrice: undefined,
+        askPrice: undefined,
+        timestamp: data.E ?? Date.now(),
+      });
+    }
+  }
+
+  function handleBookTickerMessage(data: BinanceBookTickerMsg) {
+    if (!callbacks) return;
+
+    const symbol = data.s?.toUpperCase();
+    if (!symbol || !symbol.endsWith("USDT")) return;
+    const baseAsset = symbol.slice(0, -4);
+
+    const bid = parseFloat(data.b);
+    const ask = parseFloat(data.a);
+
+    // Update cache with validation
+    if (!Number.isNaN(bid) && !Number.isNaN(ask) && bid > 0 && ask > 0) {
+      spotBidAskCache.set(baseAsset, { bid, ask });
+
+      // If we have a pending spot ticker for this asset, re-emit it with bid/ask
+      const pending = pendingSpotTickers.get(baseAsset);
+      if (pending) {
+        callbacks.onTicker({
+          exchange: "Binance",
+          baseAsset,
+          type: "spot",
+          lastPrice: parseFloat(pending.c),
+          bidPrice: bid,
+          askPrice: ask,
+          timestamp: pending.E ?? Date.now(),
+        });
+        pendingSpotTickers.delete(baseAsset);
+      }
+    }
+  }
+
+  function handlePerpBookTickerMessage(data: BinanceBookTickerMsg) {
+    if (!callbacks) return;
+
+    // bookTicker messages from combined streams may not have 'e' field
+    const isBookTicker =
+      data.e === "bookTicker" ||
+      (typeof (data as Record<string, unknown>).u === "number" &&
+        typeof (data as Record<string, unknown>).b === "string" &&
+        typeof (data as Record<string, unknown>).a === "string");
+
+    if (!isBookTicker) return;
+
+    const symbol = data.s?.toUpperCase();
+    if (!symbol || !symbol.endsWith("USDT")) return;
+    const baseAsset = symbol.slice(0, -4);
+
+    const bid = parseFloat(data.b);
+    const ask = parseFloat(data.a);
+
+    // Update cache with validation
+    if (!Number.isNaN(bid) && !Number.isNaN(ask) && bid > 0 && ask > 0) {
+      perpBidAskCache.set(baseAsset, { bid, ask });
+
+      // If we have a pending perp ticker for this asset, re-emit it with bid/ask
+      const pending = pendingPerpTickers.get(baseAsset);
+      if (pending) {
+        callbacks.onTicker({
+          exchange: "Binance",
+          baseAsset,
+          type: "perp",
+          lastPrice: parseFloat(pending.c),
+          bidPrice: bid,
+          askPrice: ask,
+          timestamp: pending.E ?? Date.now(),
+        });
+        pendingPerpTickers.delete(baseAsset);
+      }
+    }
   }
 
   function handleFuturesMessage(
@@ -205,17 +387,39 @@ export function createBinanceAdapter(): ExchangeAdapter {
     if (data.e === "24hrTicker") {
       const baseAsset = perpToBase.get(symbol);
       if (baseAsset) {
-        callbacks.onTicker({
-          exchange: "Binance",
-          baseAsset,
-          type: "perp",
-          lastPrice: parseFloat(data.c),
-          timestamp: data.E ?? Date.now(),
-        });
+        // Check cache for bid/ask from bookTicker stream
+        const cached = perpBidAskCache.get(baseAsset);
+
+        if (cached) {
+          // BookTicker already arrived, emit with bid/ask
+          callbacks.onTicker({
+            exchange: "Binance",
+            baseAsset,
+            type: "perp",
+            lastPrice: parseFloat(data.c),
+            bidPrice: cached.bid,
+            askPrice: cached.ask,
+            timestamp: data.E ?? Date.now(),
+          });
+        } else {
+          // BookTicker not arrived yet, store and emit without bid/ask
+          pendingPerpTickers.set(baseAsset, data);
+          callbacks.onTicker({
+            exchange: "Binance",
+            baseAsset,
+            type: "perp",
+            lastPrice: parseFloat(data.c),
+            bidPrice: undefined,
+            askPrice: undefined,
+            timestamp: data.E ?? Date.now(),
+          });
+        }
         return;
       }
       const futInfo = futuresExpiry.get(symbol);
       if (futInfo) {
+        const bid = parseFloat(data.b);
+        const ask = parseFloat(data.a);
         callbacks.onTicker({
           exchange: "Binance",
           baseAsset: futInfo.baseAsset,
@@ -223,6 +427,8 @@ export function createBinanceAdapter(): ExchangeAdapter {
           expiry: futInfo.expiry,
           expiryLabel: futInfo.expiryLabel,
           lastPrice: parseFloat(data.c),
+          bidPrice: !Number.isNaN(bid) && bid > 0 ? bid : undefined,
+          askPrice: !Number.isNaN(ask) && ask > 0 ? ask : undefined,
           timestamp: data.E ?? Date.now(),
         });
       }

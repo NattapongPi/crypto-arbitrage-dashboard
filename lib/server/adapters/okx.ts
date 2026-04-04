@@ -41,6 +41,7 @@ export function createOKXAdapter(): ExchangeAdapter {
       if (inst.spotSymbol) {
         spotInstToBase.set(inst.spotSymbol, inst.baseAsset);
         subscriptions.push({ channel: "tickers", instId: inst.spotSymbol });
+        // OKX spot tickers don't include bid/ask, and bbo-tbt has subscription limits
       }
       if (inst.perpSymbol) {
         swapInstToBase.set(inst.perpSymbol, inst.baseAsset);
@@ -108,13 +109,19 @@ export function createOKXAdapter(): ExchangeAdapter {
       return;
 
     if (channel === "tickers") {
-      const tick = msgData.data[0] as { last?: string; ts?: string };
+      const tick = msgData.data[0] as {
+        last?: string;
+        bidPrice?: string;
+        askPrice?: string;
+        ts?: string;
+      };
       const price = parseFloat(tick.last ?? "0");
       if (!price) return;
       const ts = parseInt(tick.ts ?? "0") || Date.now();
 
       const spotBase = spotInstToBase.get(instId);
       if (spotBase) {
+        // OKX spot tickers don't include bid/ask
         callbacks.onTicker({
           exchange: "OKX",
           baseAsset: spotBase,
@@ -127,11 +134,17 @@ export function createOKXAdapter(): ExchangeAdapter {
 
       const swapBase = swapInstToBase.get(instId);
       if (swapBase) {
+        // OKX uses 'bidPx' and 'askPx' (not 'bidPrice'/'askPrice')
+        const bid = parseFloat((tick as Record<string, string>).bidPx ?? "0");
+        const ask = parseFloat((tick as Record<string, string>).askPx ?? "0");
+
         callbacks.onTicker({
           exchange: "OKX",
           baseAsset: swapBase,
           type: "perp",
           lastPrice: price,
+          bidPrice: bid > 0 ? bid : undefined,
+          askPrice: ask > 0 ? ask : undefined,
           timestamp: ts,
         });
         return;
@@ -139,6 +152,10 @@ export function createOKXAdapter(): ExchangeAdapter {
 
       const futInfo = futuresInstInfo.get(instId);
       if (futInfo) {
+        // OKX uses 'bidPx' and 'askPx' (not 'bidPrice'/'askPrice')
+        const bid = parseFloat((tick as Record<string, string>).bidPx ?? "0");
+        const ask = parseFloat((tick as Record<string, string>).askPx ?? "0");
+
         callbacks.onTicker({
           exchange: "OKX",
           baseAsset: futInfo.baseAsset,
@@ -146,6 +163,8 @@ export function createOKXAdapter(): ExchangeAdapter {
           expiry: futInfo.expiry,
           expiryLabel: futInfo.expiryLabel,
           lastPrice: price,
+          bidPrice: bid > 0 ? bid : undefined,
+          askPrice: ask > 0 ? ask : undefined,
           timestamp: ts,
         });
       }
@@ -188,7 +207,12 @@ interface OKXPingMsg {
 
 interface OKXTickerMsg {
   arg: { channel: "tickers"; instId: string };
-  data: Array<{ last?: string; ts?: string }>;
+  data: Array<{
+    last?: string;
+    bidPrice?: string; // Best bid price
+    askPrice?: string; // Best ask price
+    ts?: string;
+  }>;
 }
 
 interface OKXFundingRateMsg {

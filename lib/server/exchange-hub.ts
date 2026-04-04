@@ -56,6 +56,8 @@ export class ExchangeHub {
     Exchange,
     { status: ExchangeStatus; latency?: number }
   >();
+  // Pending broadcasts queue for tickers that arrive before subscription completes
+  private pendingBroadcasts = new Map<Exchange, string[]>();
 
   // How long to wait before closing an exchange connection after last client
   // unsubscribes. Prevents churn during React StrictMode double-mount or
@@ -125,12 +127,40 @@ export class ExchangeHub {
     await this.ensureInstruments();
 
     this.incrementRef(exchange, session);
+
+    // Flush any broadcasts that arrived before subscription completed
+    this.flushPendingBroadcasts(exchange);
   }
 
   private unsubscribe(session: ClientSession, exchange: Exchange) {
     if (!session.subscribedExchanges.has(exchange)) return;
     session.subscribedExchanges.delete(exchange);
     this.decrementRef(exchange);
+  }
+
+  // Flush pending broadcast queue for an exchange once subscribers are available
+  private flushPendingBroadcasts(exchange: Exchange) {
+    const pending = this.pendingBroadcasts.get(exchange);
+    if (!pending || pending.length === 0) return;
+
+    const subscribers = Array.from(this.clients).filter(
+      (client) =>
+        client.subscribedExchanges.has(exchange) &&
+        client.ws.readyState === 1 /* OPEN */,
+    );
+
+    if (subscribers.length === 0) return;
+
+    for (const msg of pending) {
+      for (const client of subscribers) {
+        client.ws.send(msg);
+      }
+    }
+
+    console.log(
+      `[Hub] Flushed ${pending.length} pending broadcasts for ${exchange}`,
+    );
+    this.pendingBroadcasts.delete(exchange);
   }
 
   // ─── Ref counting ─────────────────────────────────────────────────────────
@@ -242,13 +272,40 @@ export class ExchangeHub {
   // ─── Broadcasting ─────────────────────────────────────────────────────────
 
   private broadcast(exchange: Exchange, message: string) {
-    for (const client of this.clients) {
-      if (
+    const subscribedClients = Array.from(this.clients).filter(
+      (client) =>
         client.subscribedExchanges.has(exchange) &&
-        client.ws.readyState === 1 /* OPEN */
-      ) {
-        client.ws.send(message);
+        client.ws.readyState === 1 /* OPEN */,
+    );
+
+    if (subscribedClients.length === 0) {
+      // No subscribers yet - queue the message for later delivery
+      if (!this.pendingBroadcasts.has(exchange)) {
+        this.pendingBroadcasts.set(exchange, []);
       }
+      const queue = this.pendingBroadcasts.get(exchange)!;
+      // Limit queue size to prevent memory issues (keep last 100 messages)
+      if (queue.length >= 100) {
+        queue.shift();
+      }
+      queue.push(message);
+      return;
+    }
+
+    // Send to current subscribers
+    for (const client of subscribedClients) {
+      client.ws.send(message);
+    }
+
+    // Flush any pending messages for this exchange
+    const pending = this.pendingBroadcasts.get(exchange);
+    if (pending && pending.length > 0) {
+      for (const msg of pending) {
+        for (const client of subscribedClients) {
+          client.ws.send(msg);
+        }
+      }
+      this.pendingBroadcasts.delete(exchange);
     }
   }
 

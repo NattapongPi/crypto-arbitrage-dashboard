@@ -139,6 +139,8 @@ export function createBybitAdapter(): ExchangeAdapter {
       const price = parseFloat(tickerData.lastPrice ?? "0");
       if (!price) return;
 
+      // Bybit spot tickers don't include bid/ask in the tickers channel
+      // and orderbook.1 subscription doesn't work reliably, so we only use lastPrice
       callbacks.onTicker({
         exchange: "Bybit",
         baseAsset,
@@ -154,11 +156,16 @@ export function createBybitAdapter(): ExchangeAdapter {
       const price = parseFloat(tickerData.lastPrice ?? "0");
       if (!price) return;
 
+      const bid = parseFloat(tickerData.bid1Price ?? "0");
+      const ask = parseFloat(tickerData.ask1Price ?? "0");
+
       callbacks.onTicker({
         exchange: "Bybit",
         baseAsset: perpBase,
         type: "perp",
         lastPrice: price,
+        bidPrice: bid > 0 ? bid : undefined,
+        askPrice: ask > 0 ? ask : undefined,
         timestamp: data.ts ?? Date.now(),
       });
 
@@ -181,6 +188,9 @@ export function createBybitAdapter(): ExchangeAdapter {
       const price = parseFloat(tickerData.lastPrice ?? "0");
       if (!price) return;
 
+      const bid = parseFloat(tickerData.bid1Price ?? "0");
+      const ask = parseFloat(tickerData.ask1Price ?? "0");
+
       const ticker: NormalizedTicker = {
         exchange: "Bybit",
         baseAsset: futInfo.baseAsset,
@@ -188,6 +198,8 @@ export function createBybitAdapter(): ExchangeAdapter {
         expiry: futInfo.expiry,
         expiryLabel: futInfo.expiryLabel,
         lastPrice: price,
+        bidPrice: bid > 0 ? bid : undefined,
+        askPrice: ask > 0 ? ask : undefined,
         timestamp: data.ts ?? Date.now(),
       };
       callbacks.onTicker(ticker);
@@ -206,6 +218,8 @@ function subscribeBatched(send: (data: string) => void, topics: string[]) {
 
 interface BybitTickerData {
   lastPrice?: string;
+  bid1Price?: string; // Best bid price
+  ask1Price?: string; // Best ask price
   fundingRate?: string;
   nextFundingTime?: string;
   [key: string]: string | undefined;
