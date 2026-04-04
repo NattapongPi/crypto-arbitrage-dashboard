@@ -142,7 +142,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
   const alerts = useRef<LiveAlert[]>([]);
   const exchangeHealth = useRef<ExchangeHealth[]>(EMPTY_STATE.exchangeHealth);
   const proxyLatencyRef = useRef<number | undefined>(undefined);
-  const adapters = useRef(new Map<string, ExchangeAdapter>());
+  const adapters = useRef(new Map<Exchange, ExchangeAdapter>());
   const instruments = useRef<InstrumentInfo[]>([]);
   const calcTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alertTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -189,6 +189,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
     // Find all (exchange, baseAsset) combos that have both spot and perp
     for (const [, ticker] of tickers.current) {
       if (ticker.type !== "spot") continue;
+      if (!s.exchanges[ticker.exchange]) continue;
       const perpKey = `${ticker.exchange}:${ticker.baseAsset}:perp`;
       const perpTicker = tickers.current.get(perpKey);
       if (!perpTicker) continue;
@@ -201,12 +202,14 @@ export function useMarketData(settings: UserSettings): MarketDataState {
       const feeAdj = calcSpotFuturesFeeAdjPnl(
         basis,
         fees.makerFeePercent,
-        fees.takerFeePercent
+        fees.takerFeePercent,
       );
-      const bufKey = bufferKey(ticker.exchange, ticker.baseAsset, "spot");
+      // Track basis momentum for 1-min change
+      const basisBufKey = bufferKey(ticker.exchange, ticker.baseAsset, "basis");
+      pushToBuffer(basisBufKey, basis);
       const change1min = calc1MinChange(
-        ticker.lastPrice,
-        priceBuffers.current.get(bufKey) ?? []
+        basis,
+        priceBuffers.current.get(basisBufKey) ?? [],
       );
       const signal = determineSpotFuturesSignal(basis, feeAdj, thresholds);
 
@@ -228,11 +231,11 @@ export function useMarketData(settings: UserSettings): MarketDataState {
 
     // Spot-futures stats
     const opportunities = spotFuturesData.filter(
-      (d) => d.signal === "BUY BASIS" || d.signal === "LONG SPOT"
+      (d) => d.signal === "BUY BASIS" || d.signal === "LONG SPOT",
     );
     const bestBasis = spotFuturesData.reduce(
       (max, d) => Math.max(max, d.basisPercent),
-      0
+      0,
     );
     const spotFuturesStats: SpotFuturesStats = {
       activeOpportunities: opportunities.length,
@@ -250,7 +253,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
       const signal = determineFundingSignal(
         annualized,
         fr.fundingRate,
-        thresholds
+        thresholds,
       );
 
       fundingRateData.push({
@@ -273,7 +276,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
         d.nextFundingTime && (!min || d.nextFundingTime < min)
           ? d.nextFundingTime
           : min,
-      0
+      0,
     );
     const fundingStats: FundingStats = {
       highestRate: fundingRateData[0]?.currentRate ?? 0,
@@ -316,29 +319,29 @@ export function useMarketData(settings: UserSettings): MarketDataState {
         futuresByAsset.get(`${farTicker.exchange}:${farTicker.baseAsset}`) ??
         [];
       const nearTickerForCalendar = assetGroup.find(
-        (t) => t.expiry! < farTicker.expiry!
+        (t) => t.expiry! < farTicker.expiry!,
       );
 
       // Spot vs Far leg spread
       if (spotTicker) {
         const spreadPercent = calcCalendarSpread(
           spotTicker.lastPrice,
-          farTicker.lastPrice
+          farTicker.lastPrice,
         );
         const daysToFar = calcDaysToExpiry(farTicker.expiry);
         const annReturn = calcCalendarAnnualizedReturn(
           spreadPercent,
-          daysToFar
+          daysToFar,
         );
         const feeAdj = calcCalendarFeeAdjPnl(
           spreadPercent,
           fees.makerFeePercent,
-          fees.takerFeePercent
+          fees.takerFeePercent,
         );
         const signal = determineCalendarSignal(
           spreadPercent,
           feeAdj,
-          thresholds
+          thresholds,
         );
 
         calendarSpreadData.push({
@@ -368,24 +371,24 @@ export function useMarketData(settings: UserSettings): MarketDataState {
       if (nearTickerForCalendar) {
         const spreadPercent = calcCalendarSpread(
           nearTickerForCalendar.lastPrice,
-          farTicker.lastPrice
+          farTicker.lastPrice,
         );
         const daysToNear = calcDaysToExpiry(nearTickerForCalendar.expiry!);
         const daysToFar = calcDaysToExpiry(farTicker.expiry);
         const annReturn = calcCalendarAnnualizedReturn(
           spreadPercent,
           daysToFar,
-          daysToNear
+          daysToNear,
         );
         const feeAdj = calcCalendarFeeAdjPnl(
           spreadPercent,
           fees.makerFeePercent,
-          fees.takerFeePercent
+          fees.takerFeePercent,
         );
         const signal = determineCalendarSignal(
           spreadPercent,
           feeAdj,
-          thresholds
+          thresholds,
         );
 
         calendarSpreadData.push({
@@ -436,7 +439,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
 
     const termStructure: TermStructurePoint[] = preferredTs.sort(
       (a: TermStructurePoint, b: TermStructurePoint) =>
-        a.expiry.localeCompare(b.expiry)
+        a.expiry.localeCompare(b.expiry),
     );
 
     const calendarStats: CalendarStats = {
@@ -453,7 +456,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
       alerts.current,
       spotFuturesData,
       fundingRateData,
-      calendarSpreadData
+      calendarSpreadData,
     );
     alerts.current = updatedAlerts;
     const alertStats = computeAlertStats(updatedAlerts);
@@ -462,7 +465,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
     setState((prev) => ({
       ...prev,
       isConnecting: exchangeHealth.current.every(
-        (e) => e.status === "CONNECTING"
+        (e) => e.status === "CONNECTING",
       ),
       exchangeHealth: [...exchangeHealth.current],
       proxyLatency: proxyLatencyRef.current,
@@ -496,7 +499,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
       tickers.current.set(tickerKey(ticker), ticker);
       pushToBuffer(
         bufferKey(ticker.exchange, ticker.baseAsset, ticker.type),
-        ticker.lastPrice
+        ticker.lastPrice,
       );
       lastTickTimeRef.current = ticker.timestamp;
       scheduleRecalc();
@@ -507,7 +510,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
     },
     onStatusChange(exchange, status, latency) {
       const idx = exchangeHealth.current.findIndex(
-        (h) => h.exchange === exchange
+        (h) => h.exchange === exchange,
       );
       if (idx === -1) {
         exchangeHealth.current.push({ exchange, status, latency });
@@ -535,7 +538,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
 
       // Disconnect adapters for exchanges that were just disabled
       for (const [exchange, adapter] of adapters.current) {
-        if (!settings.exchanges[exchange as keyof typeof settings.exchanges]) {
+        if (!settings.exchanges[exchange]) {
           adapter.disconnect();
           adapters.current.delete(exchange);
           // Clear stale tickers and funding rates for this exchange
@@ -547,17 +550,16 @@ export function useMarketData(settings: UserSettings): MarketDataState {
               fundingRates.current.delete(key);
           }
           // Update status bar immediately
-          callbacksRef.current.onStatusChange(exchange as Exchange, "OFFLINE");
+          callbacksRef.current.onStatusChange(exchange, "OFFLINE");
         }
       }
 
       // Connect adapters for newly enabled exchanges
-      for (const [exchange, enabled] of Object.entries(settings.exchanges)) {
-        if (!enabled) continue;
+      const allExchanges: Exchange[] = ["Binance", "Bybit", "OKX", "Deribit"];
+      for (const exchange of allExchanges) {
+        if (!settings.exchanges[exchange]) continue;
         if (adapters.current.has(exchange)) continue; // already connected
-        const adapter = createAdapter(
-          exchange as keyof typeof settings.exchanges
-        );
+        const adapter = createAdapter(exchange);
         adapters.current.set(exchange, adapter);
         adapter.connect(instruments.current, callbacksRef.current);
       }

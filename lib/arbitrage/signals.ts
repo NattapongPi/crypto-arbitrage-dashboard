@@ -4,9 +4,9 @@
  * All thresholds come from UserSettings so the user can configure them.
  */
 
-import type { Signal, UserSettings } from '../types'
+import type { Signal, UserSettings } from "../types";
 
-type Thresholds = UserSettings['thresholds']
+type Thresholds = UserSettings["thresholds"];
 
 /**
  * Signal for spot-futures basis opportunities.
@@ -14,12 +14,13 @@ type Thresholds = UserSettings['thresholds']
 export function determineSpotFuturesSignal(
   basisPercent: number,
   feeAdjPnl: number,
-  thresholds: Thresholds
+  thresholds: Thresholds,
 ): Signal {
-  if (basisPercent < -0.1) return 'INVERTED'
-  if (feeAdjPnl >= thresholds.minBasisPercent) return 'BUY BASIS'
-  if (basisPercent >= thresholds.minBasisPercent * 0.5) return 'WATCH'
-  return 'SKIP'
+  // Inverted market is a market condition, not user preference
+  if (basisPercent < -0.1) return "INVERTED";
+  if (feeAdjPnl >= thresholds.minBasisPercent) return "BUY BASIS";
+  if (basisPercent >= thresholds.minBasisPercent * 0.5) return "WATCH";
+  return "SKIP";
 }
 
 /**
@@ -28,12 +29,12 @@ export function determineSpotFuturesSignal(
 export function determineFundingSignal(
   annualized: number,
   fundingRate: number,
-  thresholds: Thresholds
+  thresholds: Thresholds,
 ): Signal {
-  if (fundingRate < -0.005) return 'SHORT OPP'
-  if (annualized >= thresholds.minAnnualizedPercent) return 'LONG SPOT'
-  if (annualized >= thresholds.minAnnualizedPercent * 0.5) return 'WATCH'
-  return 'SKIP'
+  if (fundingRate < -0.005) return "SHORT OPP";
+  if (annualized >= thresholds.minAnnualizedPercent) return "LONG SPOT";
+  if (annualized >= thresholds.minAnnualizedPercent * 0.5) return "WATCH";
+  return "SKIP";
 }
 
 /**
@@ -42,9 +43,9 @@ export function determineFundingSignal(
 export function determineCalendarSignal(
   spreadPercent: number,
   feeAdjPnl: number,
-  thresholds: Thresholds
+  thresholds: Thresholds,
 ): Signal {
-  if (feeAdjPnl >= thresholds.minSpreadPercent) return 'ENTER'
-  if (spreadPercent >= thresholds.minSpreadPercent * 0.5) return 'WATCH'
-  return 'SKIP'
+  if (feeAdjPnl >= thresholds.minSpreadPercent) return "ENTER";
+  if (spreadPercent >= thresholds.minSpreadPercent * 0.5) return "WATCH";
+  return "SKIP";
 }

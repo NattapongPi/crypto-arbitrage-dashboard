@@ -3,191 +3,224 @@
  * Identical to lib/exchanges/bybit.ts but uses server-ws-manager (Node.js ws library).
  */
 
-import { createWsManager } from '../server-ws-manager'
-import type { AdapterCallbacks, ExchangeAdapter, InstrumentInfo, NormalizedFundingRate, NormalizedTicker } from '../../types'
+import { createWsManager } from "../server-ws-manager";
+import type {
+  AdapterCallbacks,
+  ExchangeAdapter,
+  InstrumentInfo,
+  NormalizedFundingRate,
+  NormalizedTicker,
+} from "../../types";
 
-const SPOT_WS_URL = 'wss://stream.bybit.com/v5/public/spot'
-const LINEAR_WS_URL = 'wss://stream.bybit.com/v5/public/linear'
-const PING_INTERVAL_MS = 20_000
-const SUBSCRIBE_BATCH_SIZE = 10
+const SPOT_WS_URL = "wss://stream.bybit.com/v5/public/spot";
+const LINEAR_WS_URL = "wss://stream.bybit.com/v5/public/linear";
+const PING_INTERVAL_MS = 20_000;
+const SUBSCRIBE_BATCH_SIZE = 10;
 
 export function createBybitAdapter(): ExchangeAdapter {
-  let spotManager: ReturnType<typeof createWsManager> | null = null
-  let linearManager: ReturnType<typeof createWsManager> | null = null
-  let spotPingTimer: ReturnType<typeof setInterval> | null = null
-  let linearPingTimer: ReturnType<typeof setInterval> | null = null
-  let callbacks: AdapterCallbacks | null = null
+  let spotManager: ReturnType<typeof createWsManager> | null = null;
+  let linearManager: ReturnType<typeof createWsManager> | null = null;
+  let spotPingTimer: ReturnType<typeof setInterval> | null = null;
+  let linearPingTimer: ReturnType<typeof setInterval> | null = null;
+  let callbacks: AdapterCallbacks | null = null;
 
-  let spotSymbolToBase = new Map<string, string>()
-  let perpSymbolToBase = new Map<string, string>()
-  let futuresSymbolInfo = new Map<string, { baseAsset: string; expiry: string; expiryLabel: string }>()
+  let spotSymbolToBase = new Map<string, string>();
+  let perpSymbolToBase = new Map<string, string>();
+  let futuresSymbolInfo = new Map<
+    string,
+    { baseAsset: string; expiry: string; expiryLabel: string }
+  >();
 
   function connect(instruments: InstrumentInfo[], cb: AdapterCallbacks) {
-    callbacks = cb
-    const bybitInstruments = instruments.filter((i) => i.exchange === 'Bybit')
-    if (bybitInstruments.length === 0) return
+    callbacks = cb;
+    const bybitInstruments = instruments.filter((i) => i.exchange === "Bybit");
+    if (bybitInstruments.length === 0) return;
 
-    callbacks.onStatusChange('Bybit', 'CONNECTING')
+    callbacks.onStatusChange("Bybit", "CONNECTING");
 
-    spotSymbolToBase = new Map()
-    perpSymbolToBase = new Map()
-    futuresSymbolInfo = new Map()
+    spotSymbolToBase = new Map();
+    perpSymbolToBase = new Map();
+    futuresSymbolInfo = new Map();
 
     for (const inst of bybitInstruments) {
-      if (inst.spotSymbol) spotSymbolToBase.set(inst.spotSymbol, inst.baseAsset)
-      if (inst.perpSymbol) perpSymbolToBase.set(inst.perpSymbol, inst.baseAsset)
+      if (inst.spotSymbol)
+        spotSymbolToBase.set(inst.spotSymbol, inst.baseAsset);
+      if (inst.perpSymbol)
+        perpSymbolToBase.set(inst.perpSymbol, inst.baseAsset);
       for (const contract of inst.futuresContracts) {
         futuresSymbolInfo.set(contract.symbol, {
           baseAsset: inst.baseAsset,
           expiry: contract.expiry,
           expiryLabel: contract.expiryLabel,
-        })
+        });
       }
     }
 
     const spotTopics = bybitInstruments
       .filter((i) => i.spotSymbol)
-      .map((i) => `tickers.${i.spotSymbol}`)
+      .map((i) => `tickers.${i.spotSymbol}`);
 
     spotManager = createWsManager({
       url: SPOT_WS_URL,
       onOpen: (send) => {
-        subscribeBatched(send, spotTopics)
-        spotPingTimer = setInterval(() => send(JSON.stringify({ op: 'ping' })), PING_INTERVAL_MS)
-        callbacks?.onStatusChange('Bybit', 'LIVE', spotManager?.getLatency())
+        subscribeBatched(send, spotTopics);
+        spotPingTimer = setInterval(
+          () => send(JSON.stringify({ op: "ping" })),
+          PING_INTERVAL_MS,
+        );
+        callbacks?.onStatusChange("Bybit", "LIVE", spotManager?.getLatency());
       },
-      onMessage: (data) => handleMessage(data as BybitMsg, 'spot'),
+      onMessage: (data) => {
+        if (isBybitMsg(data)) {
+          handleMessage(data, "spot");
+        }
+      },
       onClose: () => {
-        if (spotPingTimer) clearInterval(spotPingTimer)
-        callbacks?.onStatusChange('Bybit', 'CONNECTING')
+        if (spotPingTimer) clearInterval(spotPingTimer);
+        callbacks?.onStatusChange("Bybit", "CONNECTING");
       },
-      onError: () => callbacks?.onStatusChange('Bybit', 'OFFLINE'),
-    })
+      onError: () => callbacks?.onStatusChange("Bybit", "OFFLINE"),
+    });
 
-    const linearTopics: string[] = []
+    const linearTopics: string[] = [];
     for (const inst of bybitInstruments) {
-      if (inst.perpSymbol) linearTopics.push(`tickers.${inst.perpSymbol}`)
+      if (inst.perpSymbol) linearTopics.push(`tickers.${inst.perpSymbol}`);
       for (const contract of inst.futuresContracts) {
-        linearTopics.push(`tickers.${contract.symbol}`)
+        linearTopics.push(`tickers.${contract.symbol}`);
       }
     }
 
     linearManager = createWsManager({
       url: LINEAR_WS_URL,
       onOpen: (send) => {
-        subscribeBatched(send, linearTopics)
-        linearPingTimer = setInterval(() => send(JSON.stringify({ op: 'ping' })), PING_INTERVAL_MS)
+        subscribeBatched(send, linearTopics);
+        linearPingTimer = setInterval(
+          () => send(JSON.stringify({ op: "ping" })),
+          PING_INTERVAL_MS,
+        );
       },
-      onMessage: (data) => handleMessage(data as BybitMsg, 'linear'),
+      onMessage: (data) => {
+        if (isBybitMsg(data)) {
+          handleMessage(data, "linear");
+        }
+      },
       onClose: () => {
-        if (linearPingTimer) clearInterval(linearPingTimer)
+        if (linearPingTimer) clearInterval(linearPingTimer);
       },
-      onError: () => callbacks?.onStatusChange('Bybit', 'OFFLINE'),
-    })
+      onError: () => callbacks?.onStatusChange("Bybit", "OFFLINE"),
+    });
 
-    spotManager.connect()
-    linearManager.connect()
+    spotManager.connect();
+    linearManager.connect();
   }
 
   function disconnect() {
-    if (spotPingTimer) clearInterval(spotPingTimer)
-    if (linearPingTimer) clearInterval(linearPingTimer)
-    spotManager?.disconnect()
-    linearManager?.disconnect()
-    spotManager = null
-    linearManager = null
-    callbacks = null
+    if (spotPingTimer) clearInterval(spotPingTimer);
+    if (linearPingTimer) clearInterval(linearPingTimer);
+    spotManager?.disconnect();
+    linearManager?.disconnect();
+    spotManager = null;
+    linearManager = null;
+    callbacks = null;
   }
 
-  function handleMessage(data: BybitMsg, source: 'spot' | 'linear') {
-    if (!callbacks) return
-    if (!data?.topic || !data?.data) return
-    if (!data.topic.startsWith('tickers.')) return
+  function handleMessage(data: BybitMsg, source: "spot" | "linear") {
+    if (!callbacks) return;
+    if (!data?.topic || !data?.data) return;
+    if (!data.topic.startsWith("tickers.")) return;
 
-    const symbol = data.topic.replace('tickers.', '')
-    const tickerData = data.data as BybitTickerData
+    const symbol = data.topic.replace("tickers.", "");
+    const tickerData = data.data;
 
-    if (source === 'spot') {
-      const baseAsset = spotSymbolToBase.get(symbol)
-      if (!baseAsset) return
+    if (source === "spot") {
+      const baseAsset = spotSymbolToBase.get(symbol);
+      if (!baseAsset) return;
 
-      const price = parseFloat(tickerData.lastPrice ?? '0')
-      if (!price) return
+      const price = parseFloat(tickerData.lastPrice ?? "0");
+      if (!price) return;
 
       callbacks.onTicker({
-        exchange: 'Bybit',
+        exchange: "Bybit",
         baseAsset,
-        type: 'spot',
+        type: "spot",
         lastPrice: price,
         timestamp: data.ts ?? Date.now(),
-      })
-      return
+      });
+      return;
     }
 
-    const perpBase = perpSymbolToBase.get(symbol)
+    const perpBase = perpSymbolToBase.get(symbol);
     if (perpBase) {
-      const price = parseFloat(tickerData.lastPrice ?? '0')
-      if (!price) return
+      const price = parseFloat(tickerData.lastPrice ?? "0");
+      if (!price) return;
 
       callbacks.onTicker({
-        exchange: 'Bybit',
+        exchange: "Bybit",
         baseAsset: perpBase,
-        type: 'perp',
+        type: "perp",
         lastPrice: price,
         timestamp: data.ts ?? Date.now(),
-      })
+      });
 
-      const fundingRate = parseFloat(tickerData.fundingRate ?? 'NaN')
-      const nextFundingTime = parseInt(tickerData.nextFundingTime ?? '0')
+      const fundingRate = parseFloat(tickerData.fundingRate ?? "NaN");
+      const nextFundingTime = parseInt(tickerData.nextFundingTime ?? "0");
       if (!isNaN(fundingRate) && nextFundingTime) {
         const funding: NormalizedFundingRate = {
-          exchange: 'Bybit',
+          exchange: "Bybit",
           baseAsset: perpBase,
           fundingRate: fundingRate * 100,
           nextFundingTime,
-        }
-        callbacks.onFunding(funding)
+        };
+        callbacks.onFunding(funding);
       }
-      return
+      return;
     }
 
-    const futInfo = futuresSymbolInfo.get(symbol)
+    const futInfo = futuresSymbolInfo.get(symbol);
     if (futInfo) {
-      const price = parseFloat(tickerData.lastPrice ?? '0')
-      if (!price) return
+      const price = parseFloat(tickerData.lastPrice ?? "0");
+      if (!price) return;
 
       const ticker: NormalizedTicker = {
-        exchange: 'Bybit',
+        exchange: "Bybit",
         baseAsset: futInfo.baseAsset,
-        type: 'future',
+        type: "future",
         expiry: futInfo.expiry,
         expiryLabel: futInfo.expiryLabel,
         lastPrice: price,
         timestamp: data.ts ?? Date.now(),
-      }
-      callbacks.onTicker(ticker)
+      };
+      callbacks.onTicker(ticker);
     }
   }
 
-  return { exchange: 'Bybit', connect, disconnect }
+  return { exchange: "Bybit", connect, disconnect };
 }
 
 function subscribeBatched(send: (data: string) => void, topics: string[]) {
   for (let i = 0; i < topics.length; i += SUBSCRIBE_BATCH_SIZE) {
-    const batch = topics.slice(i, i + SUBSCRIBE_BATCH_SIZE)
-    send(JSON.stringify({ op: 'subscribe', args: batch }))
+    const batch = topics.slice(i, i + SUBSCRIBE_BATCH_SIZE);
+    send(JSON.stringify({ op: "subscribe", args: batch }));
   }
 }
 
-interface BybitMsg {
-  topic?: string
-  ts?: number
-  data?: unknown
-  op?: string
+interface BybitTickerData {
+  lastPrice?: string;
+  fundingRate?: string;
+  nextFundingTime?: string;
+  [key: string]: string | undefined;
 }
 
-interface BybitTickerData {
-  lastPrice?: string
-  fundingRate?: string
-  nextFundingTime?: string
+interface BybitMsg {
+  topic: string;
+  ts?: number;
+  data: BybitTickerData;
+  op?: string;
+}
+
+// Type guard for runtime validation
+function isBybitMsg(data: unknown): data is BybitMsg {
+  if (typeof data !== "object" || data === null) return false;
+  const msg = data as Record<string, unknown>;
+  return "topic" in msg && typeof msg.topic === "string" && "data" in msg;
 }

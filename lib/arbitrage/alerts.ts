@@ -59,11 +59,11 @@ export function mergeAlerts(
   existing: LiveAlert[],
   spotFutures: SpotFuturesPair[],
   funding: FundingRatePair[],
-  calendar: CalendarSpreadPair[]
+  calendar: CalendarSpreadPair[],
 ): LiveAlert[] {
   const now = Date.now();
   const existingByKey = new Map(
-    existing.map((a) => [alertKey(a.exchange, a.pair, a.strategy), a])
+    existing.map((a) => [alertKey(a.exchange, a.pair, a.strategy), a]),
   );
   const newAlerts: LiveAlert[] = [];
 
@@ -112,7 +112,11 @@ export function mergeAlerts(
       existingByKey.set(key, newAlerts[newAlerts.length - 1]);
     } else {
       const old = existingByKey.get(key)!;
-      existingByKey.set(key, { ...old, spread: fr.currentRate });
+      existingByKey.set(key, {
+        ...old,
+        spread: fr.currentRate,
+        feeAdjPnl: fr.annualized / 365,
+      });
     }
   }
 
@@ -154,7 +158,7 @@ export function mergeAlerts(
     ...calendar
       .filter((c) => c.signal === "ENTER")
       .map((c) =>
-        alertKey(c.exchange, `${c.asset} ${c.nearLeg}/${c.farLeg}`, "Calendar")
+        alertKey(c.exchange, `${c.asset} ${c.nearLeg}/${c.farLeg}`, "Calendar"),
       ),
   ]);
 
@@ -162,8 +166,10 @@ export function mergeAlerts(
     .map((alert) => {
       // If the opportunity is gone, accelerate to FADING only after 30s grace period
       // This prevents flickering when prices oscillate around the threshold
-      if (!activeKeys.has(alertKey(alert.exchange, alert.pair, alert.strategy))) {
-        const ageSeconds = (Date.now() - alert.createdAt) / 1000
+      if (
+        !activeKeys.has(alertKey(alert.exchange, alert.pair, alert.strategy))
+      ) {
+        const ageSeconds = (Date.now() - alert.createdAt) / 1000;
         if (ageSeconds >= 30) {
           return { ...alert, status: "FADING" as AlertStatus };
         }
@@ -183,7 +189,7 @@ export function mergeAlerts(
 /** Compute alert stats from the current alert list. */
 export function computeAlertStats(alerts: LiveAlert[]): AlertStats {
   const active = alerts.filter(
-    (a) => a.status === "ACTIVE" || a.status === "WATCH"
+    (a) => a.status === "ACTIVE" || a.status === "WATCH",
   );
   return {
     activeNow: active.length,
