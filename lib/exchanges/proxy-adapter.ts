@@ -76,7 +76,7 @@ function ensureVisibilityListener() {
 }
 
 function getWsUrl(): string {
-  // Allow overriding the WS endpoint via env var (needed for Railway TCP proxy)
+  // Allow overriding the WS endpoint via env var (useful for custom proxy configurations)
   const override = process.env.NEXT_PUBLIC_WS_URL;
   if (override) return override;
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
