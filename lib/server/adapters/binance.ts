@@ -439,9 +439,14 @@ export function createBinanceAdapter(): ExchangeAdapter {
       const baseAsset = perpToBase.get(symbol);
       if (!baseAsset) return;
 
-      const fundingRate = parseFloat(data.r ?? "0");
-      const predictedRate = parseFloat(data.P ?? "0");
+      // Binance sends funding rate as decimal (e.g., 0.00041000 = 0.041%)
+      // Convert to percentage format expected by the system
+      const fundingRate = parseFloat(data.r ?? "0") * 100;
+      const predictedRate = parseFloat(data.P ?? "0") * 100;
       const nextFundingTime = parseInt(data.T ?? "0");
+
+      // Guard against invalid data
+      if (!nextFundingTime) return;
 
       const funding: NormalizedFundingRate = {
         exchange: "Binance",

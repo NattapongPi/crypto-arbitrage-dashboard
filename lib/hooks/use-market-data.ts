@@ -139,6 +139,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
   const tickers = useRef(new Map<string, NormalizedTicker>());
   const fundingRates = useRef(new Map<string, NormalizedFundingRate>());
   const priceBuffers = useRef(new Map<string, PriceSnapshot[]>());
+  const fundingRateBuffers = useRef(new Map<string, PriceSnapshot[]>());
   const alerts = useRef<LiveAlert[]>([]);
   const exchangeHealth = useRef<ExchangeHealth[]>(EMPTY_STATE.exchangeHealth);
   const proxyLatencyRef = useRef<number | undefined>(undefined);
@@ -174,6 +175,17 @@ export function useMarketData(settings: UserSettings): MarketDataState {
     const cutoff = now - PRICE_BUFFER_WINDOW_MS * 2;
     const firstValid = buf.findIndex((s) => s.timestamp >= cutoff);
     if (firstValid > 0) priceBuffers.current.set(key, buf.slice(firstValid));
+  }
+
+  function pushToFundingBuffer(key: string, rate: number) {
+    const now = Date.now();
+    if (!fundingRateBuffers.current.has(key)) fundingRateBuffers.current.set(key, []);
+    const buf = fundingRateBuffers.current.get(key)!;
+    buf.push({ price: rate, timestamp: now });
+    // Trim entries older than 2 minutes
+    const cutoff = now - PRICE_BUFFER_WINDOW_MS * 2;
+    const firstValid = buf.findIndex((s) => s.timestamp >= cutoff);
+    if (firstValid > 0) fundingRateBuffers.current.set(key, buf.slice(firstValid));
   }
 
   // ── Recalculation ─────────────────────────────────────────────────────────────
@@ -260,8 +272,13 @@ export function useMarketData(settings: UserSettings): MarketDataState {
         thresholds,
       );
 
+      // Track funding rate history for 1-min change calculation
+      const fKey = fundingKey(fr);
+      pushToFundingBuffer(fKey, fr.fundingRate);
+      const change1min = calc1MinChange(fr.fundingRate, fundingRateBuffers.current.get(fKey) || []);
+
       fundingRateData.push({
-        id: fundingKey(fr),
+        id: fKey,
         exchange: fr.exchange,
         pair: `${fr.baseAsset}-PERP`,
         currentRate: fr.fundingRate,
@@ -269,6 +286,7 @@ export function useMarketData(settings: UserSettings): MarketDataState {
         nextFundingTime: fr.nextFundingTime,
         annualized,
         openInterest: fr.openInterest,
+        change1min,
         signal,
       });
     }

@@ -5,13 +5,19 @@ import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { StatCard, StatCardRow } from '@/components/dashboard/stat-card'
 import { DataTable } from '@/components/dashboard/data-table'
 import { SignalBadge } from '@/components/dashboard/signal-badge'
+import { ExchangeFilter } from '@/components/dashboard/exchange-filter'
 import { useMarketDataContext } from '@/lib/context/market-data-context'
 import { formatRate, formatPercent, formatCountdown, formatOI } from '@/lib/formatters'
-import type { FundingRatePair } from '@/lib/types'
+import type { Exchange, FundingRatePair } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export default function FundingRatePage() {
   const { fundingRateData, fundingStats } = useMarketDataContext()
+  const [selectedExchange, setSelectedExchange] = useState<Exchange | "All">("All")
+
+  const filteredData = selectedExchange === "All"
+    ? fundingRateData
+    : fundingRateData.filter((item) => item.exchange === selectedExchange)
 
   // Countdown driven by the real next funding time
   const [countdown, setCountdown] = useState('--:--:--')
@@ -83,6 +89,20 @@ export default function FundingRatePage() {
       ),
     },
     {
+      key: 'change1min',
+      header: 'Chg 1min',
+      mobileHidden: true,
+      render: (item: FundingRatePair) => (
+        <span className={cn('font-mono tabular-nums',
+          item.change1min > 0 ? 'text-emerald-400' :
+          item.change1min < 0 ? 'text-red-400' :
+          'text-muted-foreground'
+        )}>
+          {formatPercent(item.change1min)}
+        </span>
+      ),
+    },
+    {
       key: 'openInterest',
       header: 'Open Interest',
       mobileHidden: true,
@@ -112,7 +132,19 @@ export default function FundingRatePage() {
           <StatCard label="Next Settlement" value={countdown} variant="yellow" />
         </StatCardRow>
 
-        <DataTable data={fundingRateData} columns={columns} title="Live Funding Rates — All Pairs" />
+        <DataTable
+          data={filteredData}
+          columns={columns}
+          title="Live Funding Rates — All Pairs"
+          enableColumnToggle={true}
+          defaultHiddenColumns={['predictedRate', 'openInterest']}
+          headerAction={
+            <ExchangeFilter
+              selected={selectedExchange}
+              onSelect={setSelectedExchange}
+            />
+          }
+        />
       </div>
     </DashboardLayout>
   )

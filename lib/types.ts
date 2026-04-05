@@ -52,6 +52,7 @@ export interface FundingRatePair {
   nextFundingTime: number; // Unix ms timestamp
   annualized: number;
   openInterest?: number; // Raw USD value
+  change1min: number; // 1-minute rate change percentage
   signal: Signal;
 }
 

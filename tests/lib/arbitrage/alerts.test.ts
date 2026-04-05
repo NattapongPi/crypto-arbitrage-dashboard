@@ -266,6 +266,7 @@ describe("mergeAlerts", () => {
         currentRate: 0.01,
         nextFundingTime: MOCK_NOW + 28800000,
         annualized: 20,
+        change1min: 0,
         signal: "LONG SPOT",
       },
     ];
@@ -287,6 +288,7 @@ describe("mergeAlerts", () => {
         currentRate: -0.01,
         nextFundingTime: MOCK_NOW + 28800000,
         annualized: -10,
+        change1min: 0,
         signal: "SHORT OPP",
       },
     ];
@@ -379,6 +381,7 @@ describe("mergeAlerts", () => {
         currentRate: -0.02,
         nextFundingTime: MOCK_NOW + 28800000,
         annualized: -20,
+        change1min: 0,
         signal: "SHORT OPP",
       },
     ];
@@ -550,6 +553,7 @@ describe("mergeAlerts", () => {
         currentRate: 0.01,
         nextFundingTime: MOCK_NOW + 28800000,
         annualized: 10,
+        change1min: 0,
         signal: "LONG SPOT",
       },
     ];
